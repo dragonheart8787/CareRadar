@@ -125,7 +125,7 @@ export async function geocode(
     url.searchParams.set("limit", "1");
     const res = await fetch(url.toString(), {
       headers: {
-        "User-Agent": "disaster-care-radar-demo/0.1 (competition project)",
+        "User-Agent": "care-radar-demo/0.1 (competition project)",
       },
     });
     if (!res.ok) return null;
