@@ -91,6 +91,23 @@ export function renderHtml(): string {
     font-size:12px; color:var(--ink); line-height:1.6; word-break:break-all;
   }
 
+  .score-breakdown-text{ font-size:11px; color:var(--ink-dim); margin-bottom:8px; }
+
+  .review-panel{
+    margin:10px 14px; padding:10px 12px; border:1px solid var(--amber);
+    background:var(--amber-dim); border-radius:8px;
+  }
+  .review-title{
+    font-size:12px; color:var(--amber); font-weight:700;
+    margin-bottom:6px; line-height:1.5;
+  }
+  .review-row{
+    font-size:12px; display:flex; gap:8px; align-items:baseline; padding:3px 0;
+  }
+  .review-wait{
+    font-family:"IBM Plex Mono", monospace; color:var(--amber); white-space:nowrap;
+  }
+
   #map{ height:100%; }
   .leaflet-popup-content{ font-family:"IBM Plex Sans TC", sans-serif; font-size:13px; }
 </style>
@@ -107,6 +124,7 @@ export function renderHtml(): string {
       <button class="toggle-btn active" data-sort="care_score">Care Score 排序</button>
     </div>
     <div class="hint" id="hint"></div>
+    <div id="review-panel"></div>
     <div id="list"></div>
   </div>
   <div id="map"></div>
@@ -153,7 +171,11 @@ function renderList(cases){
     const needTypes = (c.need_types_parsed || []).map(needTypeLabel).join(' · ');
     const isFull = c.status === 'full';
     const b = c.score_breakdown;
-    const totalForBar = Math.max(b.vulnerability + b.severity + b.urgency + b.resource_gap, 1);
+    // 用「加權後的貢獻值」畫比例，不是未加權的原始分量 —— 否則畫面上的
+    // 比例會跟這四項對總分的實際貢獻不一致，等於畫一張會騙人的圖。
+    const totalForBar = Math.max(
+      b.vulnerability_contribution + b.severity_contribution +
+      b.urgency_contribution + b.resource_gap_contribution, 1);
     const claimToken = readClaimToken(c.id);
     const card = document.createElement('div');
     card.className = 'card' + (isFull ? ' full' : '');
@@ -174,11 +196,12 @@ function renderList(cases){
         </div>
       </div>
       <div class="bars">
-        <div class="bar-v" style="width:\${(b.vulnerability/totalForBar)*100}%"></div>
-        <div class="bar-s" style="width:\${(b.severity/totalForBar)*100}%"></div>
-        <div class="bar-u" style="width:\${(b.urgency/totalForBar)*100}%"></div>
-        <div class="bar-r" style="width:\${(b.resource_gap/totalForBar)*100}%"></div>
+        <div class="bar-v" style="width:\${(b.vulnerability_contribution/totalForBar)*100}%"></div>
+        <div class="bar-s" style="width:\${(b.severity_contribution/totalForBar)*100}%"></div>
+        <div class="bar-u" style="width:\${(b.urgency_contribution/totalForBar)*100}%"></div>
+        <div class="bar-r" style="width:\${(b.resource_gap_contribution/totalForBar)*100}%"></div>
       </div>
+      <div class="score-breakdown-text">脆弱程度 +\${b.vulnerability_contribution.toFixed(1)} · 災害程度 +\${b.severity_contribution.toFixed(1)} · 等待時間 +\${b.urgency_contribution.toFixed(1)} · 人力缺口 +\${b.resource_gap_contribution.toFixed(1)}</div>
       <div class="claim-row">
         <span class="slots">志工 \${c.volunteers_assigned}/\${c.volunteers_needed}</span>
         <input type="text" placeholder="你的稱呼（選填）" id="name-\${c.id}" \${isFull ? 'disabled' : ''}/>
@@ -194,6 +217,52 @@ function renderList(cases){
     card.querySelector('.addr-btn')?.addEventListener('click', () => showAddress(c.id));
     list.appendChild(card);
   });
+}
+
+function hoursWaited(reportedAt){
+  // D1 的 datetime('now') 是 UTC，補 Z 才不會被當成本地時間解析。
+  const t = new Date(reportedAt + 'Z').getTime();
+  return Math.round(((Date.now() - t) / 3600000) * 10) / 10;
+}
+
+function renderReviewPanel(cases){
+  const panel = document.getElementById('review-panel');
+  if (!panel) return;
+  panel.innerHTML = '';
+
+  const pending = cases
+    .filter(c => c.status === 'open' && c.needs_human_verification)
+    .sort((a, b) =>
+      new Date(a.reported_at + 'Z').getTime() - new Date(b.reported_at + 'Z').getTime()
+    );
+
+  // 沒有待複核案件時安靜地不佔位置：這個面板出現在志工每天都會看的主畫面，
+  // 沒事的時候不該用一句「目前沒有」去佔掉版面。
+  if (!pending.length) return;
+
+  const box = document.createElement('div');
+  box.className = 'review-panel';
+
+  const title = document.createElement('div');
+  title.className = 'review-title';
+  title.textContent = '\u26A0\uFE0F 待人工複核（資訊不足，並非優先度低，需盡快電話確認）';
+  box.appendChild(title);
+
+  pending.forEach(c => {
+    const row = document.createElement('div');
+    row.className = 'review-row';
+    const wait = document.createElement('span');
+    wait.className = 'review-wait';
+    wait.textContent = '已等待 ' + hoursWaited(c.reported_at).toFixed(1) + ' 小時';
+    const text = document.createElement('span');
+    // 用 textContent：summary / raw_text 都是使用者通報的自由文字。
+    text.textContent = c.summary || c.raw_text;
+    row.appendChild(wait);
+    row.appendChild(text);
+    box.appendChild(row);
+  });
+
+  panel.appendChild(box);
 }
 
 function renderMarkers(cases){
@@ -217,6 +286,7 @@ async function refresh(){
   document.getElementById('hint').textContent = HINTS[currentSort];
   const cases = await loadCases(currentSort);
   renderList(cases);
+  renderReviewPanel(cases);
   renderMarkers(cases);
 }
 

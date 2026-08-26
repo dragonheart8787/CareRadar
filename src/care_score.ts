@@ -5,8 +5,9 @@ import type { CareScoreBreakdown, CaseRow } from "./types";
  *
  * 設計原則（對應簡報裡承諾評審的三件事）：
  *   1. 規則式、可解釋：每個分數都能拆解回「為什麼」。
- *   2. 資料不全時「fail-closed 但方向相反」：寧可多給一點分數、讓人工多看一眼，
- *      也不讓案件因為欄位缺漏而悄悄被排到後面（見 unknown_bonus）。
+ *   2. 資料不全「不加分也不扣分」：欄位缺漏完全不影響 Care Score，只會讓
+ *      needs_human_verification=1，交給人工去電確認。（早期版本會替全缺漏的
+ *      案件加 10 分，那其實是讓 Confidence 反向滲進了分數，已移除。）
  *   3. Confidence 永遠不參與這裡的加總。信心不足只會讓 needs_human_verification=1，
  *      不會讓 total 分數變低。這是整個系統對「不會拍照定位的長輩」的承諾。
  *
@@ -36,13 +37,6 @@ export const CARE_SCORE_WEIGHTS = {
   resourceGap: {
     pointsPerMissingVolunteer: 5,
     cap: 20,
-  },
-  unknownBonus: {
-    // 當「三個核心脆弱欄位」(age / lives_alone / mobility_impaired) 全部缺漏時，
-    // 代表這則通報很可能是文字很短、講不清楚的求助（常見於慌亂中打字的長輩、
-    // 或代填但資訊不全的鄰居通報）。我們選擇「多給分」而不是「當作0分」，
-    // 並同時標記 needs_human_verification，讓人工去電確認，而不是讓案件消失。
-    points: 10,
   },
   // 四個子分數的加權比例，總和為 1。
   blend: {
@@ -104,25 +98,34 @@ export function computeCareScore(
     w.resourceGap.cap
   );
 
-  // --- Unknown bonus ---
-  const coreFieldsAllMissing =
-    row.age === null && row.lives_alone === null && row.mobility_impaired === null;
-  const unknownBonus = coreFieldsAllMissing ? w.unknownBonus.points : 0;
+  // --- 加權貢獻 ---
+  // 資訊不足「完全不影響」這裡的任何一項。缺漏只由 needs_human_verification
+  // 這條獨立的線處理（見下方 Confidence Score）—— 讓資訊不足去動分數本身，
+  // 等於把 Confidence 偷渡進 Care Score，那正是這個檔案承諾不做的事。
+  const vulnerabilityContribution = round1(vulnerability * w.blend.vulnerability);
+  const severityContribution = round1(severity * w.blend.severity);
+  const urgencyContribution = round1(urgency * w.blend.urgency);
+  const resourceGapContribution = round1(resourceGap * w.blend.resourceGap);
 
-  const total =
-    vulnerability * w.blend.vulnerability +
-    severity * w.blend.severity +
-    urgency * w.blend.urgency +
-    resourceGap * w.blend.resourceGap +
-    unknownBonus;
+  // 加總已經四捨五入過的貢獻值，讓畫面上列出的四個數字永遠加得出 total ——
+  // 一個「可解釋」的分數，不該讓人自己加一遍卻對不起來。
+  const total = round1(
+    vulnerabilityContribution +
+      severityContribution +
+      urgencyContribution +
+      resourceGapContribution
+  );
 
   return {
     vulnerability: round1(vulnerability),
     severity: round1(severity),
     urgency: round1(urgency),
     resource_gap: round1(resourceGap),
-    unknown_bonus: unknownBonus,
-    total: round1(total),
+    vulnerability_contribution: vulnerabilityContribution,
+    severity_contribution: severityContribution,
+    urgency_contribution: urgencyContribution,
+    resource_gap_contribution: resourceGapContribution,
+    total,
   };
 }
 

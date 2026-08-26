@@ -66,10 +66,16 @@ export interface ClaimResult {
 }
 
 export interface CareScoreBreakdown {
+  // 四個子分數的「原始分量」（未加權），README 的公式說明用得到。
   vulnerability: number;
   severity: number;
   urgency: number;
   resource_gap: number;
-  unknown_bonus: number;
+  // 乘上 blend 權重之後、實際貢獻給 total 的值。前端要用這組畫比例，
+  // 用原始分量畫會讓視覺比例跟實際貢獻不一致。
+  vulnerability_contribution: number;
+  severity_contribution: number;
+  urgency_contribution: number;
+  resource_gap_contribution: number;
   total: number;
 }
