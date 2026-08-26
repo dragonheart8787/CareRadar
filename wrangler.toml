@@ -1,4 +1,4 @@
-name = "disaster-care-radar"
+name = "care-radar"
 main = "src/index.ts"
 compatibility_date = "2026-08-01"
 compatibility_flags = ["nodejs_compat"]
