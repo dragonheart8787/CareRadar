@@ -26,12 +26,37 @@ D1 (SQLite)：cases / case_status_history / volunteer_claims
    ├─ Confidence Score（規則式：關鍵欄位填了幾個，不採信模型自報）
    └─ Care Score（規則式加權，見下方公式，跟 Confidence 完全獨立）
    ▼
-GET /api/cases?sort=care_score   → 志工看到的排序清單 + 地圖
+GET /api/cases?sort=care_score   → 志工看到的排序清單 + 地圖（只有 public_* 模糊化座標）
 POST /api/cases/:id/claim        → 原子性認領，名額滿自動 status='full' 並從清單消失
+                                   回應帶一組一次性 claim token
+GET /api/cases/:id/address?token=… → 憑 claim token 換精確地址（exact_* + location_text）
 ```
 
 前端是單一 HTML（`src/frontend.ts` 回傳字串），地圖用 Leaflet + OSM 圖磚，
 沒有額外的建置流程，方便你在 Demo 現場直接改。
+
+## 精確地址存取控制
+
+`/api/cases` 這個公開清單**只會回傳模糊化後的 `public_lat` / `public_lng`**，
+精確座標和地址文字不會出現在任何公開回應裡。要看到精確位置，必須先認領：
+
+```
+POST /api/cases/:id/claim
+  → 回應 { ...case, claim_token: "…" }        ← 只在這一次回應出現
+
+GET /api/cases/:id/address?token=<claim_token>
+  → 200 { location_text, exact_lat, exact_lng }
+  → 403 { error: "invalid or missing token" }  ← token 錯誤或缺漏
+```
+
+`claim_token` 由 `crypto.randomUUID()` 產生，資料庫（`volunteer_claims.claim_token_hash`）
+只存它的 SHA-256 雜湊值，**系統本身也無法從資料庫回推原始字串**。驗證時把傳入的
+token 用同樣方式雜湊後比對。
+
+前端在認領成功後把 token 存進 `localStorage`（key 為 `claim_token_<caseId>`），
+有 token 的案件卡片才會多出一個「查看精確地址」按鈕。沒認領過、或換了瀏覽器／
+清過快取的人，卡片上不會出現這個按鈕，也不會顯示任何提示文字 —— 就是安靜地
+不出現，只看得到模糊化座標。
 
 ## Care Score 公式（可調權重都在 `src/care_score.ts`）
 
@@ -108,10 +133,9 @@ git push -u origin main
 
 ## 已知限制（誠實列出，不要在 Demo 被問到才臨場編）
 
-- **沒有志工身份驗證**：目前任何人都能認領案件並看到模糊化後的座標；
-  精確地址目前也還沒做「只有認領者看得到」的存取控制（資料庫欄位已經分開
-  `exact_*` / `public_*`，但 API 目前回傳的都是模糊化座標，尚未實作認領後解鎖）。
-  正式上線前這是第一優先要補的東西。
+- **claim token 沒有過期機制，也不限制使用次數**：一旦認領過就永久有效，
+  次數不限。它目前只做到「防止未認領者查看精確地址」，不是一套完整的存取
+  控制系統 —— 沒有志工身份驗證，任何人都還是能認領案件來取得 token。
 - **多輪追問未實作**：AI 抽取失敗或欄位缺漏時，目前只在 LINE 回覆裡提醒
   「已標記待複核」，還沒有真的追問「請問您幾歲？」的多輪對話（需要 Durable
   Objects 或某種 session 儲存）。
@@ -122,6 +146,18 @@ git push -u origin main
 - **沒有 rate limiting / 反灌水機制**：目前任何人都可以無限次通報。
 - **API 沒有auth**：`/api/cases/:id/claim` 目前任何人都能打，Demo 用沒問題，
   公開對外前需要加上驗證。
+- **前端每 15 秒自動刷新清單**，會把使用者剛展開的精確地址畫面收合，需要重新
+  點一次「查看精確地址」。
+- **AI 對 `need_types` 的分類偶爾不夠準**：例如「搬運家具」被分到 `other` 而不是
+  `furniture_moving`。這不影響 Care Score 計算（分數不看 need_types），但會影響
+  志工在卡片上看到的需求標籤。之後可以在抽取 prompt 裡幫每個 enum 值補上中文
+  範例詞來改善。
+
+## 未來方向（不是限制，是刻意的路線圖）
+
+- **精確地址改用 LINE 推播單獨發送**：更貼近實務的做法是志工認領成功後，直接
+  透過 LINE 把精確地址推播給該名志工，而不是留在網頁上讓瀏覽器保管。本版先用
+  claim token 作為過渡方案，把「公開清單只有模糊座標」這件事先立起來。
 
 這些都是刻意的範圍取捨，不是疏忽 —— 在簡報第10點被問到「還缺什麼」時，
 直接照這份清單回答即可。
