@@ -1,4 +1,4 @@
-name = "care-radar"
+name = "careradar"
 main = "src/index.ts"
 compatibility_date = "2026-08-01"
 compatibility_flags = ["nodejs_compat"]
@@ -14,7 +14,7 @@ binding = "AI"
 [[d1_databases]]
 binding = "DB"
 database_name = "disaster-care-radar-db"
-database_id = "REPLACE_WITH_YOUR_D1_DATABASE_ID"
+database_id = "83feebfb-668f-48c3-9e1c-cd71df0c62c1"
 
 # Secrets (set with `wrangler secret put <NAME>`, never commit these):
 #   LINE_CHANNEL_SECRET
