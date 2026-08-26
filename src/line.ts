@@ -1,6 +1,11 @@
 import type { Env } from "./types";
 import { extractFields, geocode, fuzzLocation } from "./structuring";
-import { insertCase } from "./db";
+import { describeMissingFields } from "./care_score";
+import {
+  findPendingSupplementCase,
+  insertCase,
+  supplementCase,
+} from "./db";
 
 interface LineEvent {
   type: string;
@@ -82,6 +87,14 @@ function buildConfirmationText(
   return msg;
 }
 
+function buildFollowUpQuestionText(missingLabels: string[]): string {
+  return (
+    "已經收到您的訊息，還需要以下資訊才能準確評估優先順序，麻煩直接回覆補充：\n" +
+    missingLabels.join("、") +
+    "\n\n即使暫時不方便補充，我們也會請在地志工/里長協助電話確認，不會因此降低協助的優先順序。"
+  );
+}
+
 export async function handleLineWebhook(
   request: Request,
   env: Env,
@@ -151,24 +164,31 @@ async function processLineEvents(env: Env, events: LineEvent[]) {
       const exact = await geocode(fields.location_text);
       const fuzzed = exact ? fuzzLocation(exact.lat, exact.lng) : null;
 
-      const created = await insertCase(env, {
-        source: "line",
-        reporterLineUserId: userId,
-        rawText: text,
-        fields,
-        exact,
-        fuzzed,
-      });
+      // 同一位使用者 15 分鐘內還有待複核的案件 → 這則當作補充，不另開新案件。
+      const pending = await findPendingSupplementCase(env, userId, 15);
+      const caseRow = pending
+        ? await supplementCase(env, pending.id, fields, text, exact, fuzzed)
+        : await insertCase(env, {
+            source: "line",
+            reporterLineUserId: userId,
+            rawText: text,
+            fields,
+            exact,
+            fuzzed,
+          });
 
       if (event.replyToken) {
+        // 還是資訊不足 → 明講還缺什麼並邀請補充；補齊了 → 照原本的確認訊息。
         await replyMessage(
           env,
           event.replyToken,
-          buildConfirmationText(
-            created.summary ?? fields.summary,
-            created.confidence_score ?? 0,
-            created.needs_human_verification === 1
-          )
+          caseRow.needs_human_verification === 1
+            ? buildFollowUpQuestionText(describeMissingFields(caseRow))
+            : buildConfirmationText(
+                caseRow.summary ?? fields.summary,
+                caseRow.confidence_score ?? 0,
+                caseRow.needs_human_verification === 1
+              )
         );
       }
     } catch (err) {

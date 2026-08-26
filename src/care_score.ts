@@ -134,7 +134,7 @@ export function computeCareScore(
  * 用規則式計算（核對關鍵欄位是否非空），不採信模型自報的信心值 ——
  * LLM 自己講「我有90%把握」不是一個可稽核、可信賴的數字。
  */
-const CRITICAL_FIELDS: (keyof Pick<
+export const CRITICAL_FIELDS: (keyof Pick<
   CaseRow,
   | "location_text"
   | "age"
@@ -160,6 +160,26 @@ export function computeConfidenceScore(row: CaseRow): number {
 
 export function needsHumanVerification(confidence: number): boolean {
   return confidence < 0.5;
+}
+
+/** 關鍵欄位對使用者說得懂的中文說法（追問時用）。 */
+const CRITICAL_FIELD_LABELS: Record<(typeof CRITICAL_FIELDS)[number], string> = {
+  location_text: "所在地區",
+  age: "年齡",
+  lives_alone: "是否獨居",
+  mobility_impaired: "是否行動不便",
+  flood_depth_cm: "淹水深度",
+  volunteers_needed: "需要幾位志工協助",
+};
+
+/**
+ * 還缺哪些關鍵欄位。判斷標準跟 computeConfidenceScore 完全一致 ——
+ * 在那裡沒被算成「已填」的欄位，這裡就要說得出來，兩邊不能有落差。
+ */
+export function describeMissingFields(row: CaseRow): string[] {
+  return CRITICAL_FIELDS.filter(
+    (f) => row[f] === null || row[f] === undefined
+  ).map((f) => CRITICAL_FIELD_LABELS[f]);
 }
 
 function round1(n: number): number {

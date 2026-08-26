@@ -142,6 +142,163 @@ export async function getCase(env: Env, id: number): Promise<CaseRow | null> {
 }
 
 /**
+ * 找出這位使用者在時間窗內、還在等補充資訊的案件。
+ * 不用 Durable Objects 保存對話狀態 —— 「哪一筆案件還缺資訊」本來就記在
+ * D1 的 needs_human_verification 上，直接查它就是最誠實的狀態來源。
+ */
+export async function findPendingSupplementCase(
+  env: Env,
+  lineUserId: string | null | undefined,
+  windowMinutes: number = 15
+): Promise<CaseRow | null> {
+  if (!lineUserId) return null; // 拿不到 userId 就無從對應，不猜
+  return env.DB.prepare(
+    `SELECT * FROM cases
+     WHERE reporter_line_user_id = ?
+       AND status = 'open'
+       AND needs_human_verification = 1
+       AND updated_at > datetime('now', '-' || ? || ' minutes')
+     ORDER BY updated_at DESC
+     LIMIT 1`
+  )
+    .bind(lineUserId, windowMinutes)
+    .first<CaseRow>();
+}
+
+/**
+ * 把後續訊息的新資訊補進既有案件，而不是另開一筆。
+ *
+ * 合併原則：**只填空，不覆蓋**。已經講過的資訊一律以先前那次為準 ——
+ * 使用者補充時常常只回答被問到的那幾項，其餘欄位模型可能抽出 null 或
+ * 抽錯，若讓新值蓋掉舊值，等於讓一次追問把原本正確的資料洗掉。
+ */
+export async function supplementCase(
+  env: Env,
+  caseId: number,
+  newFields: ExtractedFields,
+  newRawText: string,
+  newExact: { lat: number; lng: number } | null,
+  newFuzzed: { lat: number; lng: number } | null
+): Promise<CaseRow> {
+  const existing = await getCase(env, caseId);
+  if (!existing) throw new Error(`Case ${caseId} not found`);
+
+  // 缺水/缺電：任一次提到就算有（OR），不會因為第二則沒提到就被清掉。
+  const noWater = existing.no_water || newFields.no_water ? 1 : 0;
+  const noElectricity =
+    existing.no_electricity || newFields.no_electricity ? 1 : 0;
+
+  // need_types：兩次的聯集去重。
+  const mergedNeedTypes = Array.from(
+    new Set([
+      ...parseNeedTypes(existing.need_types),
+      ...(newFields.need_types ?? []),
+    ])
+  );
+
+  // 保留完整對話軌跡，之後人工複核看得到使用者原話。
+  const mergedRawText = `${existing.raw_text}\n---\n${newRawText}`;
+
+  const newSummary = (newFields.summary ?? "").trim();
+  const mergedSummary = !newSummary
+    ? existing.summary
+    : existing.summary
+      ? `${existing.summary}；補充：${newSummary}`
+      : newSummary;
+
+  // location_text 是這次才第一次填上，才順帶帶入座標；原本已有座標不覆蓋。
+  const locationJustFilled =
+    existing.location_text === null && newFields.location_text !== null;
+  const adoptCoords =
+    locationJustFilled &&
+    newExact !== null &&
+    existing.exact_lat === null &&
+    existing.exact_lng === null;
+
+  const merged: CaseRow = {
+    ...existing,
+    location_text: existing.location_text ?? newFields.location_text,
+    age: existing.age ?? newFields.age,
+    lives_alone: existing.lives_alone ?? boolToInt(newFields.lives_alone),
+    mobility_impaired:
+      existing.mobility_impaired ?? boolToInt(newFields.mobility_impaired),
+    has_young_children:
+      existing.has_young_children ?? boolToInt(newFields.has_young_children),
+    household_size: existing.household_size ?? newFields.household_size,
+    flood_depth_cm: existing.flood_depth_cm ?? newFields.flood_depth_cm,
+    // volunteers_needed 在 schema 是 NOT NULL DEFAULT 1，永遠不會是 null，
+    // 依「現有值非 null 就保留」的規則，固定沿用現有值。
+    volunteers_needed: existing.volunteers_needed,
+    no_water: noWater,
+    no_electricity: noElectricity,
+    need_types: JSON.stringify(mergedNeedTypes),
+    raw_text: mergedRawText,
+    summary: mergedSummary,
+    exact_lat: adoptCoords ? newExact.lat : existing.exact_lat,
+    exact_lng: adoptCoords ? newExact.lng : existing.exact_lng,
+    public_lat: adoptCoords ? (newFuzzed?.lat ?? null) : existing.public_lat,
+    public_lng: adoptCoords ? (newFuzzed?.lng ?? null) : existing.public_lng,
+  };
+
+  // 用合併後的完整資料重算，補進來的欄位才會反映到信心分數上。
+  const confidence = computeConfidenceScore(merged);
+  const needsVerify = needsHumanVerification(confidence) ? 1 : 0;
+
+  const updated = await env.DB.prepare(
+    `UPDATE cases SET
+       location_text = ?, exact_lat = ?, exact_lng = ?,
+       public_lat = ?, public_lng = ?,
+       age = ?, lives_alone = ?, mobility_impaired = ?,
+       has_young_children = ?, household_size = ?,
+       flood_depth_cm = ?, no_water = ?, no_electricity = ?, need_types = ?,
+       volunteers_needed = ?, raw_text = ?, summary = ?,
+       confidence_score = ?, needs_human_verification = ?,
+       updated_at = datetime('now')
+     WHERE id = ?
+     RETURNING *`
+  )
+    .bind(
+      merged.location_text,
+      merged.exact_lat,
+      merged.exact_lng,
+      merged.public_lat,
+      merged.public_lng,
+      merged.age,
+      merged.lives_alone,
+      merged.mobility_impaired,
+      merged.has_young_children,
+      merged.household_size,
+      merged.flood_depth_cm,
+      merged.no_water,
+      merged.no_electricity,
+      merged.need_types,
+      merged.volunteers_needed,
+      merged.raw_text,
+      merged.summary,
+      confidence,
+      needsVerify,
+      caseId
+    )
+    .first<CaseRow>();
+
+  if (!updated) throw new Error(`Failed to supplement case ${caseId}`);
+
+  await logHistory(env, caseId, "supplemented", `confidence=${confidence}`);
+
+  return updated;
+}
+
+function parseNeedTypes(json: string | null): string[] {
+  if (!json) return [];
+  try {
+    const v = JSON.parse(json);
+    return Array.isArray(v) ? v : [];
+  } catch {
+    return [];
+  }
+}
+
+/**
  * 原子性認領：靠 WHERE volunteers_assigned < volunteers_needed 這個條件，
  * 讓「兩位志工同時搶最後一個名額」在 SQLite/D1 的單一 UPDATE 語句層級
  * 被正確序列化 —— 不需要額外的鎖，也不會有名額被超額分配的競態條件。
