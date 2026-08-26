@@ -65,6 +65,10 @@ async function replyMessage(env: Env, replyToken: string, text: string) {
   });
 }
 
+// 使用者第一次加好友（follow 事件）時的自我介紹訊息。
+const WELCOME_TEXT =
+  "哈囉，歡迎加入「災後需求雷達」！\n\n這個機器人是用來通報淹水復原期間的生活需求，幫忙媒合志工協助。\n\n請直接用一段話描述您的狀況，包含以下資訊：\n・所在地區（例如：台南仁德）\n・年齡、是否獨居、是否行動不便\n・淹水深度\n・需要幾位志工協助\n・需要的協助類型（清淤、搬家具、飲用水、清潔用品、水電）\n・目前是否缺水缺電\n\n範例：\n「我住台南仁德，76歲，一個人住，家裡淹了60公分，需要兩個人幫忙搬家具，也沒有飲用水。」\n\n打好之後直接傳送就可以了，我們會盡快協助媒合志工。";
+
 function buildConfirmationText(
   summary: string,
   confidence: number,
@@ -113,6 +117,14 @@ export async function handleLineWebhook(
 async function processLineEvents(env: Env, events: LineEvent[]) {
   for (const event of events) {
     try {
+      // 加好友：回一則自我介紹說明怎麼通報。這是一次性事件，跟訊息洗版是不同的
+      // 濫用情境，所以刻意不套用 LINE_RATE_LIMITER。
+      if (event.type === "follow") {
+        if (event.replyToken) {
+          await replyMessage(env, event.replyToken, WELCOME_TEXT);
+        }
+        continue;
+      }
       if (event.type !== "message" || event.message?.type !== "text") {
         continue; // 圖片/貼圖/位置訊息：MVP 先不處理，未來可用照片提升 confidence
       }
