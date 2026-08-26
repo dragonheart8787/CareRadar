@@ -80,7 +80,8 @@ function buildConfirmationText(
 
 export async function handleLineWebhook(
   request: Request,
-  env: Env
+  env: Env,
+  ctx: ExecutionContext
 ): Promise<Response> {
   if (!env.LINE_CHANNEL_SECRET) {
     return new Response("LINE_CHANNEL_SECRET not configured", { status: 500 });
@@ -99,9 +100,18 @@ export async function handleLineWebhook(
 
   const body = JSON.parse(rawBody) as LineWebhookBody;
 
-  // 逐一處理事件；單一事件處理失敗不該讓整批 webhook 回傳非 200
-  // (LINE 收到非 200 會重送，可能造成重複建立案件)。
-  for (const event of body.events ?? []) {
+  // LINE 要求 webhook 在 2 秒內回應，但 AI 抽取 + 地理編碼 + 寫入 D1 + Reply API
+  // 全部跑完常常超過，導致 LINE 判定逾時中斷連線、Worker 被取消（案件沒寫進去）。
+  // 改成先回 200，事件處理交給 waitUntil 在背景跑完。
+  ctx.waitUntil(processLineEvents(env, body.events ?? []));
+
+  return new Response("OK", { status: 200 });
+}
+
+// 逐一處理事件；單一事件處理失敗不該讓整批 webhook 回傳非 200
+// (LINE 收到非 200 會重送，可能造成重複建立案件)。
+async function processLineEvents(env: Env, events: LineEvent[]) {
+  for (const event of events) {
     try {
       if (event.type !== "message" || event.message?.type !== "text") {
         continue; // 圖片/貼圖/位置訊息：MVP 先不處理，未來可用照片提升 confidence
@@ -144,6 +154,4 @@ export async function handleLineWebhook(
       }
     }
   }
-
-  return new Response("OK", { status: 200 });
 }

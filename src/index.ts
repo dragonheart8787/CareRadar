@@ -36,7 +36,11 @@ function safeParseArray(json: string | null): string[] {
 const JSON_HEADERS = { "content-type": "application/json; charset=utf-8" };
 
 export default {
-  async fetch(request: Request, env: Env): Promise<Response> {
+  async fetch(
+    request: Request,
+    env: Env,
+    ctx: ExecutionContext
+  ): Promise<Response> {
     const url = new URL(request.url);
 
     if (request.method === "GET" && url.pathname === "/") {
@@ -46,7 +50,7 @@ export default {
     }
 
     if (request.method === "POST" && url.pathname === "/webhook/line") {
-      return handleLineWebhook(request, env);
+      return handleLineWebhook(request, env, ctx);
     }
 
     if (request.method === "GET" && url.pathname === "/api/cases") {
