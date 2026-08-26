@@ -14,11 +14,24 @@ NLU 用 **Cloudflare Workers AI**（Qwen3，跟著你的 Cloudflare 帳號走，
 LINE 使用者傳文字
    │  POST /webhook/line  (HMAC-SHA256 簽章驗證)
    ▼
+立刻回應 LINE 200 ──► 後續全部丟進 ctx.waitUntil() 背景執行
+   │                   (LINE 要求 2 秒內回應；背景處理不受這個時限約束)
+   ▼
+follow 事件（加好友）→ 自動回覆歡迎訊息，說明使用方式與範例格式，到此結束
+   │
+   ▼
+LINE_RATE_LIMITER（依 LINE userId，10 次 / 60 秒）
+   │  超過 → 回覆提醒訊息，不進入後續處理
+   ▼
 Workers AI (Qwen3, JSON Schema 結構化抽取)  ──► 只填「文字裡明確提到」的欄位，
    │                                              不確定一律 null，不腦補
    ▼
 Nominatim 地理編碼 → 座標模糊化 (fuzzLocation, ~300m 網格)
    │
+   ▼
+這位使用者 15 分鐘內有待複核的案件嗎？
+   ├─ 有 → 視為補充，合併進原本那筆（見下方「多輪追問」）
+   └─ 沒有 → 建立新案件
    ▼
 D1 (SQLite)：cases / case_status_history / volunteer_claims
    │
@@ -27,9 +40,20 @@ D1 (SQLite)：cases / case_status_history / volunteer_claims
    └─ Care Score（規則式加權，見下方公式，跟 Confidence 完全獨立）
    ▼
 GET /api/cases?sort=care_score   → 志工看到的排序清單 + 地圖（只有 public_* 模糊化座標）
-POST /api/cases/:id/claim        → 原子性認領，名額滿自動 status='full' 並從清單消失
+POST /api/cases/:id/claim        → 先過 CLAIM_RATE_LIMITER（依 IP，5 次 / 60 秒）
+                                   原子性認領，名額滿自動 status='full' 並從清單消失
                                    回應帶一組一次性 claim token
 GET /api/cases/:id/address?token=… → 憑 claim token 換精確地址（exact_* + location_text）
+```
+
+後台管理（需要 `ADMIN_KEY` 這個 secret）：
+
+```
+GET  /admin/duplicates?key=…                → 列出疑似重複案件，兩筆並排比對
+POST /api/admin/duplicates/:id/resolve      → 確認合併（關閉重複那筆）或標記非重複
+     body: { action: "merge" | "not_duplicate", key: "…" }
+
+ADMIN_KEY 未設定、請求沒帶金鑰、或金鑰不符 → 一律 401，不透露頁面內容或金鑰格式。
 ```
 
 前端是單一 HTML（`src/frontend.ts` 回傳字串），地圖用 Leaflet + OSM 圖磚，
@@ -86,6 +110,38 @@ Total = Vulnerability×0.4 + Severity×0.3 + Urgency×0.2 + ResourceGap×0.1 + U
 `needs_human_verification`，永遠不拿去乘進 Total。這是對「無法拍照定位的長輩」
 的明確承諾，Demo 時建議直接打開 `src/care_score.ts` 給評審看這一行的注解。
 
+## 多輪追問（缺資訊時主動問，而不是默默存起來）
+
+Confidence Score 不足時，系統不會只回一句「已收到」就把資料不全的案件丟著 ——
+它會直接說出**還缺哪幾個欄位**，並邀請使用者補充：
+
+```
+已經收到您的訊息，還需要以下資訊才能準確評估優先順序，麻煩直接回覆補充：
+所在地區、年齡、是否獨居、淹水深度
+
+即使暫時不方便補充，我們也會請在地志工/里長協助電話確認，不會因此降低協助的優先順序。
+```
+
+同一位 LINE 使用者在 **15 分鐘內**的下一則訊息，只要原本那筆案件仍是
+`status='open'` 且 `needs_human_verification=1`，就會被視為**補充**、合併進原本
+那筆案件，而不是兩則訊息各自建立一筆。合併規則（`supplementCase()`）：
+
+| 欄位 | 規則 |
+|---|---|
+| `location_text` / `age` / `lives_alone` / `mobility_impaired` / `has_young_children` / `household_size` / `flood_depth_cm` | **只填空，不覆蓋** —— 原本是 `null` 才採用新值 |
+| `no_water` / `no_electricity` | 取 **OR** —— 任一次提到就算有，不會因為第二則沒提到就被清掉 |
+| `need_types` | 兩次的**聯集**去重 |
+| `raw_text` | `原文 + "\n---\n" + 新訊息`，完整保留對話軌跡供人工複核 |
+| `summary` | 新摘要有實質內容才接成「原摘要；補充：新摘要」 |
+| `exact_*` / `public_*` | 只有在 `location_text` 是這次才第一次填上、且原本沒有座標時才帶入 |
+
+「只填空、不覆蓋」是刻意的：使用者補充時常常只回答被問到的那幾項，其餘欄位模型
+可能抽出 `null` 或抽錯，若讓新值蓋掉舊值，等於讓一次追問把原本正確的資料洗掉。
+
+合併後用完整資料重算 Confidence，補齊了就改回一般的確認訊息；還是不足就再問一次。
+狀態不靠 Durable Objects 保存 —— 「哪一筆案件還缺資訊」本來就記在 D1 的
+`needs_human_verification` 上，直接查它就是最誠實的狀態來源。
+
 ## 部署步驟
 
 ```bash
@@ -101,6 +157,11 @@ npm run db:schema:remote && npm run db:seed:remote
 # 3. 設定 LINE 憑證（去 LINE Developers Console 的 Channel 設定頁拿）
 npx wrangler secret put LINE_CHANNEL_SECRET
 npx wrangler secret put LINE_CHANNEL_ACCESS_TOKEN
+
+# 同樣方式設定 ADMIN_KEY，用來保護 /admin/duplicates 後台頁面。
+# 建議用一長串隨機字串（例如 openssl rand -hex 32），不要用容易猜到的值。
+# 沒設定的話後台一律回 401（fail-closed），不會變成「沒設就不用驗」。
+npx wrangler secret put ADMIN_KEY
 
 # 4. 本機開發（不含 LINE webhook，因為 LINE 需要打得到的公開網址）
 npm run dev
@@ -152,6 +213,26 @@ git push -u origin main
   `furniture_moving`。這不影響 Care Score 計算（分數不看 need_types），但會影響
   志工在卡片上看到的需求標籤。之後可以在抽取 prompt 裡幫每個 enum 值補上中文
   範例詞來改善。
+- **AI 對極短、模糊的輸入偶爾會用簡體中文回應**：例如只有兩三個字的求救訊息，
+  即使系統提示是全繁體撰寫也可能出現。之後可以在抽取的 system prompt 裡加強
+  「必須使用繁體中文」的強制要求。
+- **claim token 與案件合併狀態未連動**：一筆案件如果已被志工認領、之後又被判定
+  為重複而合併關閉，該志工手上的 claim token 與 `volunteer_claims` 紀錄不會被
+  清除或提示。這是資料整潔問題，不是安全問題 —— token 仍然只能換到那一筆案件
+  自己的地址。
+- **後台金鑰走 query string**：`/admin/duplicates?key=…` 會留在瀏覽器歷史紀錄，
+  以及任何中介代理的存取日誌裡。目前僅供內部少量使用，正式對外應改成透過
+  header 或 cookie 傳遞。
+- **多輪追問會誤合併兩件不相關的通報**：同一位使用者若在 15 分鐘內想通報兩件事
+  （例如先報自己家、再報鄰居家），第二則會被當成第一則的補充而合併在一起。
+  這跟「重複通報偵測」其實是同一類問題的另一種呈現 —— 根源都是**地址不夠明確**，
+  系統無法確信兩段文字講的是不是同一戶。
+- **地理編碼精確度的反直覺實測結果**：地址描述得**越精確**（例如完整門牌
+  「XX路三段100號」），Nominatim 有時反而因為資料庫涵蓋不到門牌層級，導致同一個
+  地址前後兩次查詢解析到**不同座標**、距離超過 150 公尺的重複判定門檻；相對地，
+  只寫到區級的粗略地址（例如「台南仁德」）每次都能穩定解析到同一個代表座標。
+  這是開發過程中用真實資料測出來的現象，也再次印證「未來方向」裡提到的：應該
+  優先支援 LINE 原生的分享位置（GPS），而不是完全依賴文字地址交給 Nominatim。
 
 ## 未來方向（不是限制，是刻意的路線圖）
 
