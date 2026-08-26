@@ -40,6 +40,71 @@ export async function findPossibleDuplicate(
   return row?.id ?? null;
 }
 
+/**
+ * 列出所有被標記為疑似重複、且尚未關閉的案件，連同它指向的原始案件。
+ * 這裡刻意不做任何自動合併判斷 —— 誤合併（把兩戶不同人家的需求當成一件）
+ * 比留著一個未處理的重複案件危害更大，決定權留給人工。
+ */
+export async function listPossibleDuplicates(
+  env: Env
+): Promise<Array<{ duplicate: CaseRow; original: CaseRow | null }>> {
+  const { results } = await env.DB.prepare(
+    `SELECT * FROM cases
+     WHERE possible_duplicate_of IS NOT NULL
+       AND status != 'closed'
+     ORDER BY reported_at DESC`
+  ).all<CaseRow>();
+
+  const pairs: Array<{ duplicate: CaseRow; original: CaseRow | null }> = [];
+  for (const duplicate of results) {
+    // 原始案件查不到（例如已被刪除）不該讓整頁掛掉，就顯示成「找不到」。
+    const original =
+      duplicate.possible_duplicate_of !== null
+        ? await getCase(env, duplicate.possible_duplicate_of)
+        : null;
+    pairs.push({ duplicate, original });
+  }
+  return pairs;
+}
+
+/**
+ * 人工裁決一筆疑似重複案件。
+ *   merge         → 關閉這筆重複案件（原始案件不動）
+ *   not_duplicate → 清掉標記，兩筆都留著
+ * 兩種都寫進 case_status_history，讓「為什麼這筆消失了」有跡可循。
+ */
+export async function resolveDuplicate(
+  env: Env,
+  caseId: number,
+  action: "merge" | "not_duplicate"
+): Promise<CaseRow | null> {
+  const existing = await getCase(env, caseId);
+  if (!existing) return null;
+
+  if (action === "merge") {
+    await env.DB.prepare(
+      `UPDATE cases SET status = 'closed', updated_at = datetime('now') WHERE id = ?`
+    )
+      .bind(caseId)
+      .run();
+    await logHistory(
+      env,
+      caseId,
+      "merged",
+      `merged_into=${existing.possible_duplicate_of}`
+    );
+  } else {
+    await env.DB.prepare(
+      `UPDATE cases SET possible_duplicate_of = NULL, updated_at = datetime('now') WHERE id = ?`
+    )
+      .bind(caseId)
+      .run();
+    await logHistory(env, caseId, "not_duplicate");
+  }
+
+  return getCase(env, caseId);
+}
+
 export async function insertCase(
   env: Env,
   params: {

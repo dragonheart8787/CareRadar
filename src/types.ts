@@ -5,6 +5,9 @@ export interface Env {
   LINE_CHANNEL_ACCESS_TOKEN?: string;
   CLAIM_RATE_LIMITER: RateLimit;
   LINE_RATE_LIMITER: RateLimit;
+  // 後台頁面金鑰。用 Dashboard 的 Variables and Secrets 設定，不進 wrangler.toml。
+  // 沒設定時後台一律視為未授權（fail-closed），不會變成「沒設就不用驗」。
+  ADMIN_KEY?: string;
 }
 
 // AI 從自然語言抽取出來的結構化欄位。

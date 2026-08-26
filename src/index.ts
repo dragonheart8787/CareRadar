@@ -1,8 +1,16 @@
 import type { CaseRow, Env } from "./types";
 import { computeCareScore } from "./care_score";
-import { claimCase, getCase, listCases, verifyClaimToken } from "./db";
-import { handleLineWebhook } from "./line";
+import {
+  claimCase,
+  getCase,
+  listCases,
+  listPossibleDuplicates,
+  resolveDuplicate,
+  verifyClaimToken,
+} from "./db";
+import { handleLineWebhook, timingSafeEqual } from "./line";
 import { renderHtml } from "./frontend";
+import { renderDuplicatesHtml } from "./admin";
 
 function toApiCase(row: CaseRow) {
   return {
@@ -34,6 +42,16 @@ function safeParseArray(json: string | null): string[] {
 }
 
 const JSON_HEADERS = { "content-type": "application/json; charset=utf-8" };
+
+/**
+ * 後台授權：ADMIN_KEY 沒設定就一律拒絕（fail-closed），不會變成「沒設就不用驗」。
+ * 比對重用 line.ts 那份常數時間比對，避免用 === 洩漏前綴資訊。
+ */
+function isAdminAuthorized(env: Env, providedKey: string): boolean {
+  if (!env.ADMIN_KEY) return false;
+  if (!providedKey) return false;
+  return timingSafeEqual(env.ADMIN_KEY, providedKey);
+}
 
 export default {
   async fetch(
@@ -142,6 +160,50 @@ export default {
         }),
         { headers: JSON_HEADERS }
       );
+    }
+
+    // 後台：疑似重複案件複核頁。回應一律不透露頁面內容或金鑰格式。
+    if (request.method === "GET" && url.pathname === "/admin/duplicates") {
+      const key = url.searchParams.get("key") ?? "";
+      if (!isAdminAuthorized(env, key)) {
+        return new Response("unauthorized", { status: 401 });
+      }
+      const pairs = await listPossibleDuplicates(env);
+      return new Response(renderDuplicatesHtml(pairs, key), {
+        headers: { "content-type": "text/html; charset=utf-8" },
+      });
+    }
+
+    const resolveMatch = url.pathname.match(
+      /^\/api\/admin\/duplicates\/(\d+)\/resolve$/
+    );
+    if (request.method === "POST" && resolveMatch) {
+      let body: { action?: string; key?: string } = {};
+      try {
+        body = await request.json();
+      } catch {
+        // 解析失敗就留空物件，下面的授權檢查會擋掉
+      }
+      if (!isAdminAuthorized(env, body.key ?? "")) {
+        return new Response("unauthorized", { status: 401 });
+      }
+      if (body.action !== "merge" && body.action !== "not_duplicate") {
+        return new Response(JSON.stringify({ error: "invalid action" }), {
+          status: 400,
+          headers: JSON_HEADERS,
+        });
+      }
+      const caseId = parseInt(resolveMatch[1], 10);
+      const updated = await resolveDuplicate(env, caseId, body.action);
+      if (!updated) {
+        return new Response(JSON.stringify({ error: "case not found" }), {
+          status: 404,
+          headers: JSON_HEADERS,
+        });
+      }
+      return new Response(JSON.stringify(toApiCase(updated)), {
+        headers: JSON_HEADERS,
+      });
     }
 
     return new Response("Not found", { status: 404 });
