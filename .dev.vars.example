@@ -1,0 +1,4 @@
+# 複製這個檔案成 .dev.vars（會被 .gitignore 排除，不會進 git）
+# 本機開發用；正式部署請改用 `wrangler secret put <NAME>`
+LINE_CHANNEL_SECRET=your-line-channel-secret
+LINE_CHANNEL_ACCESS_TOKEN=your-line-channel-access-token

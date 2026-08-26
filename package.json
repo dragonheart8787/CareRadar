@@ -1,0 +1,20 @@
+{
+  "name": "disaster-care-radar",
+  "version": "0.1.0",
+  "private": true,
+  "description": "災後需求雷達＋關懷優先排序＋志工智慧媒合 - Cloudflare Workers demo",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "typecheck": "tsc --noEmit",
+    "db:schema:local": "wrangler d1 execute disaster-care-radar-db --local --file=./schema.sql",
+    "db:schema:remote": "wrangler d1 execute disaster-care-radar-db --remote --file=./schema.sql",
+    "db:seed:local": "wrangler d1 execute disaster-care-radar-db --local --file=./seed.sql",
+    "db:seed:remote": "wrangler d1 execute disaster-care-radar-db --remote --file=./seed.sql"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260826.1",
+    "typescript": "^5.9.3",
+    "wrangler": "^4.126.0"
+  }
+}

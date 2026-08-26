@@ -1,0 +1,21 @@
+name = "disaster-care-radar"
+main = "src/index.ts"
+compatibility_date = "2026-08-01"
+compatibility_flags = ["nodejs_compat"]
+
+# Workers AI binding - no separate API key needed, billed on your Cloudflare
+# account's Workers AI Neurons (10,000/day free allocation).
+[ai]
+binding = "AI"
+
+# D1 (SQLite) database for cases / history / claims.
+# Create with: wrangler d1 create disaster-care-radar-db
+# then paste the returned database_id below.
+[[d1_databases]]
+binding = "DB"
+database_name = "disaster-care-radar-db"
+database_id = "REPLACE_WITH_YOUR_D1_DATABASE_ID"
+
+# Secrets (set with `wrangler secret put <NAME>`, never commit these):
+#   LINE_CHANNEL_SECRET
+#   LINE_CHANNEL_ACCESS_TOKEN
