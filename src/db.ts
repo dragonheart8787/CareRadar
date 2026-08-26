@@ -1,4 +1,4 @@
-import type { CaseRow, Env, ExtractedFields } from "./types";
+import type { CaseRow, ClaimResult, Env, ExtractedFields } from "./types";
 import { computeConfidenceScore, needsHumanVerification } from "./care_score";
 
 export async function logHistory(
@@ -151,7 +151,7 @@ export async function claimCase(
   env: Env,
   caseId: number,
   volunteer: { name?: string; contact?: string }
-): Promise<CaseRow | null> {
+): Promise<ClaimResult | null> {
   const updateResult = await env.DB.prepare(
     `UPDATE cases
      SET volunteers_assigned = volunteers_assigned + 1,
@@ -165,10 +165,21 @@ export async function claimCase(
     return null; // 名額已滿或案件不存在／不是 open 狀態
   }
 
+  // 一次性認領憑證：原始字串只在這次回應裡交給認領者，資料庫只留 SHA-256 雜湊，
+  // 系統本身之後也無法回推原始字串。
+  const claimToken = crypto.randomUUID();
+  const claimTokenHash = await sha256Hex(claimToken);
+
   await env.DB.prepare(
-    `INSERT INTO volunteer_claims (case_id, volunteer_name, volunteer_contact) VALUES (?, ?, ?)`
+    `INSERT INTO volunteer_claims (case_id, volunteer_name, volunteer_contact, claim_token_hash)
+     VALUES (?, ?, ?, ?)`
   )
-    .bind(caseId, volunteer.name ?? null, volunteer.contact ?? null)
+    .bind(
+      caseId,
+      volunteer.name ?? null,
+      volunteer.contact ?? null,
+      claimTokenHash
+    )
     .run();
 
   const updated = await getCase(env, caseId);
@@ -189,7 +200,38 @@ export async function claimCase(
     updated.status = "full";
   }
 
-  return updated;
+  return { case: updated, claimToken };
+}
+
+/**
+ * 驗證認領憑證：把傳入的 token 用同樣的 SHA-256 雜湊，比對 volunteer_claims
+ * 裡是否有 case_id 與 claim_token_hash 都相符的紀錄。
+ */
+export async function verifyClaimToken(
+  env: Env,
+  caseId: number,
+  token: string
+): Promise<boolean> {
+  if (!token) return false;
+  const hash = await sha256Hex(token);
+  const row = await env.DB.prepare(
+    `SELECT id FROM volunteer_claims
+     WHERE case_id = ? AND claim_token_hash = ?
+     LIMIT 1`
+  )
+    .bind(caseId, hash)
+    .first<{ id: number }>();
+  return row !== null;
+}
+
+async function sha256Hex(input: string): Promise<string> {
+  const buf = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(input)
+  );
+  return Array.from(new Uint8Array(buf))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
 }
 
 function boolToInt(b: boolean | null): number | null {

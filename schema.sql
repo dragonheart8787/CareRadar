@@ -59,6 +59,7 @@ CREATE TABLE IF NOT EXISTS volunteer_claims (
   case_id             INTEGER NOT NULL,
   volunteer_name      TEXT,
   volunteer_contact   TEXT,
+  claim_token_hash    TEXT,                                  -- SHA-256(claim token)；原始 token 只在認領當下回傳一次
   claimed_at          TEXT NOT NULL DEFAULT (datetime('now')),
   FOREIGN KEY (case_id) REFERENCES cases(id)
 );

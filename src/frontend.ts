@@ -81,6 +81,16 @@ export function renderHtml(): string {
   .claim-row button:disabled{ opacity:0.4; cursor:default; }
   .slots{ font-family:"IBM Plex Mono", monospace; font-size:12px; color:var(--ink-dim); }
 
+  .addr-row{ margin-top:8px; }
+  .addr-row button{
+    padding:5px 10px; border-radius:6px; border:1px solid var(--amber); background:transparent;
+    color:var(--amber); font-size:12px; cursor:pointer; font-family:inherit;
+  }
+  .addr-out:not(:empty){
+    margin-top:6px; padding:7px 9px; border-radius:6px; background:var(--panel-2);
+    font-size:12px; color:var(--ink); line-height:1.6; word-break:break-all;
+  }
+
   #map{ height:100%; }
   .leaflet-popup-content{ font-family:"IBM Plex Sans TC", sans-serif; font-size:13px; }
 </style>
@@ -144,6 +154,7 @@ function renderList(cases){
     const isFull = c.status === 'full';
     const b = c.score_breakdown;
     const totalForBar = Math.max(b.vulnerability + b.severity + b.urgency + b.resource_gap, 1);
+    const claimToken = readClaimToken(c.id);
     const card = document.createElement('div');
     card.className = 'card' + (isFull ? ' full' : '');
     card.innerHTML = \`
@@ -173,12 +184,14 @@ function renderList(cases){
         <input type="text" placeholder="你的稱呼（選填）" id="name-\${c.id}" \${isFull ? 'disabled' : ''}/>
         <button data-id="\${c.id}" \${isFull ? 'disabled' : ''}>我要認領</button>
       </div>
+      \${claimToken ? '<div class="addr-row"><button class="addr-btn">查看精確地址</button><div class="addr-out" id="addr-' + c.id + '"></div></div>' : ''}
     \`;
     card.addEventListener('click', (e) => {
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'BUTTON') return;
       if (c.public_lat) map.setView([c.public_lat, c.public_lng], 17);
     });
     card.querySelector('button')?.addEventListener('click', () => claimCase(c.id));
+    card.querySelector('.addr-btn')?.addEventListener('click', () => showAddress(c.id));
     list.appendChild(card);
   });
 }
@@ -219,8 +232,41 @@ async function claimCase(id){
     alert('慢了一步 —— 這個案件的志工名額剛好被別人搶走了，已經自動幫你換一個案件看看。');
   } else if (!res.ok) {
     alert('認領失敗，請稍後再試。');
+  } else {
+    // claim_token 只會在這一次回應裡出現，錯過就換不回精確地址了。
+    const data = await res.json();
+    if (data.claim_token) writeClaimToken(id, data.claim_token);
   }
   refresh();
+}
+
+function readClaimToken(id){
+  try { return localStorage.getItem('claim_token_' + id); } catch { return null; }
+}
+
+function writeClaimToken(id, token){
+  try { localStorage.setItem('claim_token_' + id, token); } catch {}
+}
+
+async function showAddress(id){
+  const token = readClaimToken(id);
+  const out = document.getElementById('addr-' + id);
+  if (!token || !out) return;
+  out.textContent = '查詢中…';
+  const res = await fetch(
+    '/api/cases/' + id + '/address?token=' + encodeURIComponent(token)
+  );
+  if (!res.ok) {
+    out.textContent = '無法取得精確地址（認領憑證已失效）。';
+    return;
+  }
+  const a = await res.json();
+  const coords = (a.exact_lat != null && a.exact_lng != null)
+    ? a.exact_lat.toFixed(6) + ', ' + a.exact_lng.toFixed(6)
+    : '（無精確座標）';
+  // 用 textContent 而不是 innerHTML：location_text 來自使用者通報的自由文字。
+  out.textContent = (a.location_text || '（無地址文字）') + '\\n精確座標：' + coords;
+  out.style.whiteSpace = 'pre-line';
 }
 
 document.querySelectorAll('.toggle-btn').forEach(btn => {

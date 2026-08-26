@@ -53,6 +53,13 @@ export interface CaseRow {
   updated_at: string;
 }
 
+// claimCase() 的回傳：case 是更新後的案件，claimToken 是「未雜湊」的原始字串。
+// 這組原始字串只在認領當下回傳這一次，資料庫只留 SHA-256 雜湊值，無法回推。
+export interface ClaimResult {
+  case: CaseRow;
+  claimToken: string;
+}
+
 export interface CareScoreBreakdown {
   vulnerability: number;
   severity: number;
