@@ -3,6 +3,8 @@ export interface Env {
   DB: D1Database;
   LINE_CHANNEL_SECRET?: string;
   LINE_CHANNEL_ACCESS_TOKEN?: string;
+  CLAIM_RATE_LIMITER: RateLimit;
+  LINE_RATE_LIMITER: RateLimit;
 }
 
 // AI 從自然語言抽取出來的結構化欄位。

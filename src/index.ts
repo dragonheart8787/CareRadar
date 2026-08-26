@@ -107,6 +107,16 @@ export default {
 
     const claimMatch = url.pathname.match(/^\/api\/cases\/(\d+)\/claim$/);
     if (request.method === "POST" && claimMatch) {
+      // 這個端點完全公開、沒有身份驗證，所以先按來源 IP 限流再往下跑。
+      const ip = request.headers.get("cf-connecting-ip") ?? "unknown";
+      const { success } = await env.CLAIM_RATE_LIMITER.limit({ key: ip });
+      if (!success) {
+        return new Response(
+          JSON.stringify({ error: "too many requests, please slow down" }),
+          { status: 429, headers: JSON_HEADERS }
+        );
+      }
+
       const caseId = parseInt(claimMatch[1], 10);
       let body: { name?: string; contact?: string } = {};
       try {

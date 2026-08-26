@@ -119,6 +119,22 @@ async function processLineEvents(env: Env, events: LineEvent[]) {
       const text = event.message.text ?? "";
       const userId = event.source?.userId ?? null;
 
+      // 簽章驗證只能擋掉偽造請求，擋不掉合法使用者短時間狂發訊息塞爆案件清單。
+      // 注意：限流 key 用 "unknown" 作為 fallback，但寫進 DB 的 reporter_line_user_id
+      // 仍然維持 null —— 「不知道是誰」不該被記成一個叫 unknown 的使用者。
+      const rateLimitKey = userId ?? "unknown";
+      const { success } = await env.LINE_RATE_LIMITER.limit({ key: rateLimitKey });
+      if (!success) {
+        if (event.replyToken) {
+          await replyMessage(
+            env,
+            event.replyToken,
+            "您通報得有點頻繁，請稍後再試一次。"
+          );
+        }
+        continue; // 跳過這則，不進入 AI 結構化跟寫入 D1
+      }
+
       const fields = await extractFields(env, text);
       const exact = await geocode(fields.location_text);
       const fuzzed = exact ? fuzzLocation(exact.lat, exact.lng) : null;

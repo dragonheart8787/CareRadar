@@ -19,3 +19,23 @@ database_id = "83feebfb-668f-48c3-9e1c-cd71df0c62c1"
 # Secrets (set with `wrangler secret put <NAME>`, never commit these):
 #   LINE_CHANNEL_SECRET
 #   LINE_CHANNEL_ACCESS_TOKEN
+
+# Rate limiting bindings（Workers 原生 API，不是 Dashboard 的 WAF 規則）。
+# namespace_id 是帳號內用來識別這個計數器的任意正整數字串，不需要事先建立資源。
+# 認領端點：同一個 IP 每 60 秒最多 5 次。
+[[ratelimits]]
+name = "CLAIM_RATE_LIMITER"
+namespace_id = "1001"
+
+  [ratelimits.simple]
+  limit = 5
+  period = 60
+
+# LINE webhook：同一個 LINE userId 每 60 秒最多 10 則通報。
+[[ratelimits]]
+name = "LINE_RATE_LIMITER"
+namespace_id = "1002"
+
+  [ratelimits.simple]
+  limit = 10
+  period = 60
