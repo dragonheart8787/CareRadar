@@ -400,7 +400,15 @@ export async function cancelClaim(
   env: Env,
   caseId: number,
   claimRowId: number
-): Promise<CaseRow | null> {
+): Promise<{ case: CaseRow; cancelledVolunteerName: string | null } | null> {
+  // 先把名字撈起來 —— DELETE 之後就查不到了，而通知通報者的訊息需要它。
+  const claimRow = await env.DB.prepare(
+    `SELECT volunteer_name FROM volunteer_claims WHERE id = ?`
+  )
+    .bind(claimRowId)
+    .first<{ volunteer_name: string | null }>();
+  const cancelledVolunteerName = claimRow?.volunteer_name ?? null;
+
   const deleteResult = await env.DB.prepare(
     `DELETE FROM volunteer_claims WHERE id = ? AND case_id = ?`
   )
@@ -424,7 +432,10 @@ export async function cancelClaim(
 
   await logHistory(env, caseId, "claim_cancelled", `claim_id=${claimRowId}`);
 
-  return getCase(env, caseId);
+  const updated = await getCase(env, caseId);
+  if (!updated) return null;
+
+  return { case: updated, cancelledVolunteerName };
 }
 
 /**

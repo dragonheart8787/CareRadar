@@ -88,7 +88,7 @@ async function replyMessage(
  * LINE 規定一個 replyToken 只能回一次，第二次呼叫 Reply API 會被拒絕、
  * 訊息就這樣消失了。
  */
-async function pushMessage(
+export async function pushMessage(
   env: Env,
   userId: string,
   text: string,

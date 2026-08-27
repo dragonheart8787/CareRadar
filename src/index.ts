@@ -11,7 +11,7 @@ import {
   verifyClaimToken,
   verifyClaimTokenReturningClaimId,
 } from "./db";
-import { handleLineWebhook, timingSafeEqual } from "./line";
+import { handleLineWebhook, pushMessage, timingSafeEqual } from "./line";
 import { renderHtml } from "./frontend";
 import { renderDuplicatesHtml } from "./admin";
 
@@ -45,6 +45,26 @@ function safeParseArray(json: string | null): string[] {
 }
 
 const JSON_HEADERS = { "content-type": "application/json; charset=utf-8" };
+
+/**
+ * 通知原始通報者：認領狀態有變化。
+ *
+ * 這是附加的 side effect，不是操作的一部分 —— 通報者可能根本不是從 LINE 來的
+ * （里長代填的案件 reporter_line_user_id 就是 null），推播也可能失敗。
+ * 兩種情況都不該讓認領／取消本身失敗，所以這裡吞掉所有錯誤、只留一筆記錄。
+ */
+async function notifyReporter(
+  env: Env,
+  caseRow: CaseRow,
+  text: string
+): Promise<void> {
+  if (!caseRow.reporter_line_user_id) return;
+  try {
+    await pushMessage(env, caseRow.reporter_line_user_id, text);
+  } catch (err) {
+    console.error("Failed to notify reporter", err);
+  }
+}
 
 /** 401 時要帶這個 header，瀏覽器看到才會跳出帳號密碼輸入視窗。 */
 const BASIC_AUTH_CHALLENGE = { "WWW-Authenticate": 'Basic realm="CareRadar Admin"' };
@@ -190,6 +210,16 @@ export default {
           { status: 409, headers: JSON_HEADERS }
         );
       }
+      // 通知通報者有人來幫忙了。用 waitUntil 丟到背景，不讓推播的往返時間
+      // 拖慢志工端的回應。
+      ctx.waitUntil(
+        notifyReporter(
+          env,
+          claimed.case,
+          `好消息！已經有志工認領您的需求，目前是 ${claimed.case.volunteers_assigned}/${claimed.case.volunteers_needed} 位志工協助中。\n認領志工：${body.name ?? "匿名志工"}`
+        )
+      );
+
       // claim_token 只在這一次回應出現，之後系統只留雜湊值。
       return new Response(
         JSON.stringify({
@@ -248,14 +278,24 @@ export default {
           { status: 403, headers: JSON_HEADERS }
         );
       }
-      const updated = await cancelClaim(env, caseId, claimRowId);
-      if (!updated) {
+      const result = await cancelClaim(env, caseId, claimRowId);
+      if (!result) {
         return new Response(
           JSON.stringify({ error: "invalid token or case already resolved" }),
           { status: 403, headers: JSON_HEADERS }
         );
       }
-      return new Response(JSON.stringify(toApiCase(updated)), {
+
+      ctx.waitUntil(
+        notifyReporter(
+          env,
+          result.case,
+          `提醒：原本認領您需求的志工（${result.cancelledVolunteerName ?? "匿名志工"}）已取消協助，目前還缺 ${result.case.volunteers_needed - result.case.volunteers_assigned} 位志工，我們會持續媒合其他志工，請放心。`
+        )
+      );
+
+      // cancelledVolunteerName 只用來組通知訊息，不回傳給前端。
+      return new Response(JSON.stringify(toApiCase(result.case)), {
         headers: JSON_HEADERS,
       });
     }
