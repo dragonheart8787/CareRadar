@@ -69,11 +69,17 @@ GET /api/cases/:id/address?token=… → 憑 claim token 換精確地址（exact
 後台管理（需要 `ADMIN_KEY` 這個 secret）：
 
 ```
-GET  /admin/duplicates?key=…                → 列出疑似重複案件，兩筆並排比對
+GET  /admin/duplicates                      → 列出疑似重複案件，兩筆並排比對
 POST /api/admin/duplicates/:id/resolve      → 確認合併（關閉重複那筆）或標記非重複
-     body: { action: "merge" | "not_duplicate", key: "…" }
+     body: { action: "merge" | "not_duplicate" }
 
-ADMIN_KEY 未設定、請求沒帶金鑰、或金鑰不符 → 一律 401，不透露頁面內容或金鑰格式。
+授權方式：HTTP Basic Auth。直接用瀏覽器打開 /admin/duplicates，會跳出原生的
+帳號密碼登入視窗 —— **帳號可以隨意填**（不檢查），**密碼填 ADMIN_KEY 的值**。
+登入一次之後瀏覽器會自動把憑證帶在後續請求上，包含頁面上按鈕觸發的 fetch，
+所以金鑰不會出現在網址列、瀏覽器歷史、代理伺服器日誌，也不會被嵌進頁面的
+JavaScript 原始碼裡。
+
+ADMIN_KEY 未設定、沒帶憑證、或密碼不符 → 一律 401，不透露頁面內容或金鑰格式。
 ```
 
 前端是單一 HTML（`src/frontend.ts` 回傳字串），地圖用 Leaflet + OSM 圖磚，
@@ -98,9 +104,33 @@ GET /api/cases/:id/address?token=<claim_token>
 token 用同樣方式雜湊後比對。
 
 前端在認領成功後把 token 存進 `localStorage`（key 為 `claim_token_<caseId>`），
-有 token 的案件卡片才會多出一個「查看精確地址」按鈕。沒認領過、或換了瀏覽器／
-清過快取的人，卡片上不會出現這個按鈕，也不會顯示任何提示文字 —— 就是安靜地
-不出現，只看得到模糊化座標。
+有 token 的案件卡片才會多出「查看精確地址」與「回報完成」按鈕。沒認領過、或換了
+瀏覽器／清過快取的人，卡片上不會出現這些按鈕，也不會顯示任何提示文字 —— 就是
+安靜地不出現，只看得到模糊化座標。
+
+### 回報完成（同一組 claim token 的另一個用途）
+
+志工處理完之後，可以用**同一組 claim token** 把案件標記為已完成，讓它真正結案，
+而不是永遠停在 `full` 狀態：
+
+```
+POST /api/cases/:id/complete
+  body: { token: "<claim_token>" }
+  → 200 { ...case }                                        ← status 變成 "completed"
+  → 403 { error: "invalid token or case already resolved" }
+```
+
+只有還在 `open` 或 `full` 的案件能被標記完成，判斷靠單一 UPDATE 的 `meta.changes`，
+所以兩位志工同時回報也不會重複寫入。403 刻意不區分「token 不對」與「案件已經結案」，
+跟地址端點同一套慣例。
+
+**`completed` 會讓這個案件的 claim token 立即失效** —— 跟案件被判定重複而合併
+關閉（`closed`）完全一樣的處理：結案之後就不該再查得到精確地址。前端在回報成功後
+也會把本機那份 token 從 `localStorage` 移除。
+
+顯示上，`completed` 案件比照 `full`：卡片半透明並標示「已完成」tag、不再提供任何
+操作按鈕，地圖標記顯示為灰色而不是分數色。它不會出現在 `sort=care_score` 的推薦
+清單裡（那裡只撈 `status = 'open'`），只在「最新回報」排序看得到。
 
 ## Care Score 公式（可調權重都在 `src/care_score.ts`）
 
@@ -257,9 +287,10 @@ git push -u origin main
 - **`volunteer_claims` 沒有索引**：目前沒有針對 `case_id` 或 `claim_token_hash`
   建立索引。Demo 規模（數十筆）完全無感，但 `verifyClaimToken` 每次驗證都要
   JOIN `cases` 並比對雜湊值，資料量成長後會退化成全表掃描，屆時應補上索引。
-- **後台金鑰走 query string**：`/admin/duplicates?key=…` 會留在瀏覽器歷史紀錄，
-  以及任何中介代理的存取日誌裡。目前僅供內部少量使用，正式對外應改成透過
-  header 或 cookie 傳遞。
+- **`closed` 案件的地圖標記沒有特別標示**：`full` 與 `completed` 的標記都會轉成
+  灰色表示非活躍，但被判定重複而合併關閉的 `closed` 案件，標記仍然是一般的分數色。
+  因為 `closed` 案件只會出現在「最新回報」排序、實務上很少被看到，這個不一致
+  目前刻意不處理。
 - **多輪追問會誤合併兩件不相關的通報**：同一位使用者若在 15 分鐘內想通報兩件事
   （例如先報自己家、再報鄰居家），第二則會被當成第一則的補充而合併在一起。
   這跟「重複通報偵測」其實是同一類問題的另一種呈現 —— 根源都是**地址不夠明確**，
