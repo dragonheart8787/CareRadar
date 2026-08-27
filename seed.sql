@@ -83,8 +83,10 @@ VALUES
    0, 'open', datetime('now','-5 minutes'));
 
 -- 案件 6：低 Confidence（資訊不全）—— 沒有年齡/獨居資訊，用來展示
--- 「Confidence Score 低」不等於「Priority 被打折」：unknown_bonus 會補償，
--- 並標記 needs_human_verification=1 讓人工去電確認。
+-- 「Confidence Score 低」不等於「Priority 被打折」：核心欄位全部缺漏並不會
+-- 讓 Care Score 加分，也不會扣分 —— 資訊不足完全不影響分數本身。它只會讓
+-- needs_human_verification=1，把這筆案件推上前端的「待人工複核」面板，
+-- 提醒人工去電確認，跟 Care Score 排序完全脫鉤處理。
 INSERT INTO cases
   (source, raw_text, location_text, exact_lat, exact_lng, public_lat, public_lng,
    age, lives_alone, mobility_impaired, has_young_children, household_size,
