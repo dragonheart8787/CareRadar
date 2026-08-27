@@ -362,6 +362,72 @@ export async function supplementCase(
 }
 
 /**
+ * 跟 verifyClaimToken 條件完全相同，但回傳的是「命中的那一筆 volunteer_claims
+ * 的 id」而不只是布林值。
+ *
+ * 為什麼不能沿用 verifyClaimToken：一個案件在 volunteers_needed > 1 時會有多位
+ * 志工、多筆認領紀錄、多組 token。「這組 token 對得上這個案件」不足以取消認領 ——
+ * 必須精準知道要退回哪一筆，否則會動到同案件裡其他人的認領。
+ */
+export async function verifyClaimTokenReturningClaimId(
+  env: Env,
+  caseId: number,
+  token: string
+): Promise<number | null> {
+  if (!token) return null;
+  const hash = await sha256Hex(token);
+  const row = await env.DB.prepare(
+    `SELECT vc.id FROM volunteer_claims vc
+     JOIN cases c ON c.id = vc.case_id
+     WHERE vc.case_id = ? AND vc.claim_token_hash = ?
+       AND vc.claimed_at > datetime('now', '-' || ? || ' hours')
+       AND c.status NOT IN ('closed', 'completed')
+     LIMIT 1`
+  )
+    .bind(caseId, hash, CLAIM_TOKEN_VALID_HOURS)
+    .first<{ id: number }>();
+  return row ? row.id : null;
+}
+
+/**
+ * 取消一筆認領，把名額還給案件。
+ *
+ * 呼叫前呼叫端已經用 verifyClaimTokenReturningClaimId 驗證過，這裡的
+ * case_id 條件與 meta.changes 檢查是防禦性的 —— 萬一有競態或呼叫方誤用，
+ * 也不會誤刪到別的案件的認領紀錄。
+ */
+export async function cancelClaim(
+  env: Env,
+  caseId: number,
+  claimRowId: number
+): Promise<CaseRow | null> {
+  const deleteResult = await env.DB.prepare(
+    `DELETE FROM volunteer_claims WHERE id = ? AND case_id = ?`
+  )
+    .bind(claimRowId, caseId)
+    .run();
+
+  if (!deleteResult.meta.changes) return null;
+
+  // MAX(..., 0)：不讓計數在任何異常情況下掉到負數。
+  // status 只有原本是 'full' 才打回 'open' —— completed / closed 不該被一次
+  // 取消動作復活（token 驗證已經排除那兩種狀態，這是雙重保險）。
+  await env.DB.prepare(
+    `UPDATE cases SET
+       volunteers_assigned = MAX(volunteers_assigned - 1, 0),
+       status = CASE WHEN status = 'full' THEN 'open' ELSE status END,
+       updated_at = datetime('now')
+     WHERE id = ?`
+  )
+    .bind(caseId)
+    .run();
+
+  await logHistory(env, caseId, "claim_cancelled", `claim_id=${claimRowId}`);
+
+  return getCase(env, caseId);
+}
+
+/**
  * 志工憑 claim token 回報「這個案件已經處理完成」。
  *
  * status IN ('open', 'full') 這個條件同時擋掉三件事：案件不存在、已經被

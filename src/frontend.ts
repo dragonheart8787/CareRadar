@@ -86,6 +86,11 @@ export function renderHtml(): string {
     padding:5px 10px; border-radius:6px; border:1px solid var(--amber); background:transparent;
     color:var(--amber); font-size:12px; cursor:pointer; font-family:inherit;
   }
+  /* 取消認領是相對負面的動作：用中性的邊框與次要文字色，明顯低於旁邊兩顆
+     琥珀色按鈕的視覺重量，不鼓勵優先點擊。 */
+  .addr-row button.cancel-btn{
+    border-color:var(--line); color:var(--ink-dim);
+  }
   .addr-out:not(:empty){
     margin-top:6px; padding:7px 9px; border-radius:6px; background:var(--panel-2);
     font-size:12px; color:var(--ink); line-height:1.6; word-break:break-all;
@@ -209,7 +214,7 @@ function renderList(cases){
         <span class="slots">志工 \${c.volunteers_assigned}/\${c.volunteers_needed}</span>
         \${isCompleted ? '' : '<input type="text" placeholder="你的稱呼（選填）" id="name-' + c.id + '"' + (isFull ? ' disabled' : '') + '/><button data-id="' + c.id + '"' + (isFull ? ' disabled' : '') + '>我要認領</button>'}
       </div>
-      \${claimToken && !isCompleted ? '<div class="addr-row"><button class="addr-btn">查看精確地址</button><button class="complete-btn">回報完成</button><div class="addr-out" id="addr-' + c.id + '"></div></div>' : ''}
+      \${claimToken && !isCompleted ? '<div class="addr-row"><button class="addr-btn">查看精確地址</button><button class="complete-btn">回報完成</button><button class="cancel-btn">取消認領</button><div class="addr-out" id="addr-' + c.id + '"></div></div>' : ''}
     \`;
     card.addEventListener('click', (e) => {
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'BUTTON') return;
@@ -218,6 +223,7 @@ function renderList(cases){
     card.querySelector('button')?.addEventListener('click', () => claimCase(c.id));
     card.querySelector('.addr-btn')?.addEventListener('click', () => showAddress(c.id));
     card.querySelector('.complete-btn')?.addEventListener('click', () => completeCase(c.id));
+    card.querySelector('.cancel-btn')?.addEventListener('click', () => cancelClaim(c.id));
     list.appendChild(card);
   });
 }
@@ -324,6 +330,24 @@ function writeClaimToken(id, token){
 
 function clearClaimToken(id){
   try { localStorage.removeItem('claim_token_' + id); } catch {}
+}
+
+async function cancelClaim(id){
+  const token = readClaimToken(id);
+  if (!token) return;
+  if (!confirm('確定要取消認領嗎？名額會還給其他志工。')) return;
+  const res = await fetch('/api/cases/' + id + '/cancel-claim', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token }),
+  });
+  if (!res.ok) {
+    alert('取消失敗，可能是認領憑證已失效，或這個案件已經結案了。');
+    return;
+  }
+  // 認領紀錄已刪除，這組 token 從此無效，本機留著沒有用途。
+  clearClaimToken(id);
+  refresh();
 }
 
 async function completeCase(id){

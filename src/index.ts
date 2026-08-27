@@ -1,6 +1,7 @@
 import type { CaseRow, Env } from "./types";
 import { computeCareScore } from "./care_score";
 import {
+  cancelClaim,
   claimCase,
   getCase,
   listCases,
@@ -8,6 +9,7 @@ import {
   markCaseCompleted,
   resolveDuplicate,
   verifyClaimToken,
+  verifyClaimTokenReturningClaimId,
 } from "./db";
 import { handleLineWebhook, timingSafeEqual } from "./line";
 import { renderHtml } from "./frontend";
@@ -213,6 +215,41 @@ export default {
       if (!updated) {
         // 刻意不區分「token 不對」與「案件已經結案／不存在」，
         // 跟 address 端點同一套慣例，避免用回應差異推敲案件狀態。
+        return new Response(
+          JSON.stringify({ error: "invalid token or case already resolved" }),
+          { status: 403, headers: JSON_HEADERS }
+        );
+      }
+      return new Response(JSON.stringify(toApiCase(updated)), {
+        headers: JSON_HEADERS,
+      });
+    }
+
+    // 認領者取消自己的認領，把名額還給案件。憑 token 精準對應到「哪一筆」
+    // 認領紀錄，所以同案件裡其他志工的認領完全不受影響。
+    const cancelMatch = url.pathname.match(/^\/api\/cases\/(\d+)\/cancel-claim$/);
+    if (request.method === "POST" && cancelMatch) {
+      const caseId = parseInt(cancelMatch[1], 10);
+      let body: { token?: string } = {};
+      try {
+        body = await request.json();
+      } catch {
+        // 解析失敗就留空物件，下面的 token 驗證會擋掉
+      }
+      const claimRowId = await verifyClaimTokenReturningClaimId(
+        env,
+        caseId,
+        body.token ?? ""
+      );
+      if (claimRowId === null) {
+        // 跟其餘 token 端點一致：不區分「token 不對」與「案件已經結案」。
+        return new Response(
+          JSON.stringify({ error: "invalid token or case already resolved" }),
+          { status: 403, headers: JSON_HEADERS }
+        );
+      }
+      const updated = await cancelClaim(env, caseId, claimRowId);
+      if (!updated) {
         return new Response(
           JSON.stringify({ error: "invalid token or case already resolved" }),
           { status: 403, headers: JSON_HEADERS }
