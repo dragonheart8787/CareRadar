@@ -16,6 +16,7 @@ jobs:
           node-version: 24
       - run: npm install
       - run: npm run typecheck
+      - run: npm test
       # dry-run 只檢查 wrangler.toml / bundle 是否正確，不會真的部署，
       # 也不需要在 CI 環境放 Cloudflare API Token。
       - run: npx wrangler deploy --dry-run

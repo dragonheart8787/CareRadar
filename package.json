@@ -7,6 +7,7 @@
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
     "typecheck": "tsc --noEmit",
+    "test": "node --experimental-strip-types --test src/*.test.ts",
     "db:schema:local": "wrangler d1 execute disaster-care-radar-db --local --file=./schema.sql",
     "db:schema:remote": "wrangler d1 execute disaster-care-radar-db --remote --file=./schema.sql",
     "db:seed:local": "wrangler d1 execute disaster-care-radar-db --local --file=./seed.sql",

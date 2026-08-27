@@ -10,5 +10,8 @@
     "resolveJsonModule": true,
     "noEmit": true
   },
-  "include": ["src"]
+  "include": ["src"],
+  // 測試檔用 node:test 執行（見 npm test），需要 Node 的型別與 .ts 副檔名 import，
+  // 兩者都不屬於 Worker 的編譯環境；實作程式碼仍受完整型別檢查。
+  "exclude": ["src/**/*.test.ts"]
 }
