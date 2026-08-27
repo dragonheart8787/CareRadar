@@ -1,6 +1,6 @@
 import type { Env } from "./types";
 import { extractFields, geocode, fuzzLocation } from "./structuring";
-import { describeMissingFields } from "./care_score";
+import { describeMissingFields, getMissingFieldKeys } from "./care_score";
 import {
   findPendingSupplementCase,
   insertCase,
@@ -20,6 +20,12 @@ interface LineEvent {
     address?: string;
   };
 }
+/** LINE Quick Reply 的一顆按鈕：按下去等同使用者自己輸入了 text。 */
+interface QuickReplyItem {
+  label: string;
+  text: string;
+}
+
 interface LineWebhookBody {
   destination: string;
   events: LineEvent[];
@@ -62,24 +68,103 @@ function arrayBufferToBase64(buf: ArrayBuffer): string {
   return btoa(binary);
 }
 
-async function replyMessage(env: Env, replyToken: string, text: string) {
+async function replyMessage(
+  env: Env,
+  replyToken: string,
+  text: string,
+  quickReplyItems?: QuickReplyItem[]
+) {
   if (!env.LINE_CHANNEL_ACCESS_TOKEN) return;
+
+  const message: Record<string, unknown> = { type: "text", text };
+  // 刻意檢查 length 而不只是「有沒有傳」：LINE 規定 quickReply.items 至少 1 筆，
+  // 送空陣列整則訊息會被退回 —— 那會讓追問訊息整個發不出去。缺的欄位剛好
+  // 只有「所在地區」時 buildQuickReplyItemsForMissingFields 就會回空陣列。
+  if (quickReplyItems?.length) {
+    message.quickReply = {
+      items: quickReplyItems.map((item) => ({
+        type: "action",
+        action: { type: "message", label: item.label, text: item.text },
+      })),
+    };
+  }
+
   await fetch("https://api.line.me/v2/bot/message/reply", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${env.LINE_CHANNEL_ACCESS_TOKEN}`,
     },
-    body: JSON.stringify({
-      replyToken,
-      messages: [{ type: "text", text }],
-    }),
+    body: JSON.stringify({ replyToken, messages: [message] }),
   });
+}
+
+/**
+ * 「答案可以窮舉成幾個選項」的關鍵欄位 → 對應的快速回覆按鈕。
+ * 按鈕的 text 是使用者按下去等同送出的自然語言句子，會走跟手動打字
+ * 完全一樣的 AI 結構化流程，後端不需要任何解析按鈕點擊的邏輯。
+ *
+ * location_text 刻意不在表內 —— 地址沒辦法窮舉成按鈕，維持自由輸入。
+ */
+const MISSING_FIELD_QUICK_REPLIES: Record<string, QuickReplyItem[]> = {
+  age: [
+    { label: "65歲以下", text: "我年齡在65歲以下" },
+    { label: "65-79歲", text: "我年齡65到79歲之間" },
+    { label: "80歲以上", text: "我年齡80歲以上" },
+  ],
+  lives_alone: [
+    { label: "獨居", text: "我一個人住，是獨居" },
+    { label: "非獨居", text: "家裡不只我一個人住" },
+  ],
+  mobility_impaired: [
+    { label: "行動不便", text: "我行動不便" },
+    { label: "行動方便", text: "我行動方便，沒有特別的行動限制" },
+  ],
+  flood_depth_cm: [
+    { label: "約30公分以下", text: "家裡淹水大約30公分以下，膝蓋以下" },
+    { label: "約30-80公分", text: "家裡淹水大約30到80公分，膝蓋到腰部之間" },
+    { label: "超過80公分", text: "家裡淹水超過80公分，腰部以上" },
+  ],
+  volunteers_needed: [
+    { label: "1人", text: "需要1位志工協助" },
+    { label: "2人", text: "需要2位志工協助" },
+    { label: "3人以上", text: "需要3位以上志工協助" },
+  ],
+};
+
+/**
+ * 把「還缺哪些欄位」換成快速回覆按鈕，依 missingFieldKeys 的順序串接。
+ *
+ * 假設：LINE 的 quickReply.items 上限是 13 顆，這裡不做裁切。
+ * 對照表五個欄位全展開是 3+2+2+3+3 = 13 顆，剛好貼齊上限；而實務上
+ * volunteers_needed 在 schema 是 NOT NULL DEFAULT 1、永遠不會被判定為缺漏，
+ * 所以實際送得出去的最多是 10 顆。
+ * 之後若讓 volunteers_needed 可為 null、往對照表新增欄位、或把任一欄位的
+ * 選項加多，總數就可能超過 13 而被 LINE 退件，屆時必須在這裡補上裁切。
+ */
+function buildQuickReplyItemsForMissingFields(
+  missingFieldKeys: string[]
+): QuickReplyItem[] {
+  const items: QuickReplyItem[] = [];
+  for (const key of missingFieldKeys) {
+    const forField = MISSING_FIELD_QUICK_REPLIES[key];
+    if (forField) items.push(...forField);
+  }
+  return items;
 }
 
 // 使用者第一次加好友（follow 事件）時的自我介紹訊息。
 const WELCOME_TEXT =
   "哈囉，歡迎加入「災後需求雷達」！\n\n這個機器人是用來通報淹水復原期間的生活需求，幫忙媒合志工協助。\n\n請直接用一段話描述您的狀況，包含以下資訊：\n・所在地區（例如：台南仁德）\n・年齡、是否獨居、是否行動不便\n・淹水深度\n・需要幾位志工協助\n・需要的協助類型（清淤、搬家具、飲用水、清潔用品、水電）\n・目前是否缺水缺電\n\n範例：\n「我住台南仁德，76歲，一個人住，家裡淹了60公分，需要兩個人幫忙搬家具，也沒有飲用水。」\n\n打好之後直接傳送就可以了，我們會盡快協助媒合志工。";
+
+// 歡迎訊息裡那顆「照著送一次看看」的按鈕。文字直接沿用 WELCOME_TEXT 內既有的
+// 範例句子（下方有執行期以外的一致性依據：兩者必須逐字相同，改一邊就要改另一邊）。
+const WELCOME_EXAMPLE_TEXT =
+  "我住台南仁德，76歲，一個人住，家裡淹了60公分，需要兩個人幫忙搬家具，也沒有飲用水。";
+
+const WELCOME_QUICK_REPLIES: QuickReplyItem[] = [
+  { label: "傳送範例文字看看", text: WELCOME_EXAMPLE_TEXT },
+];
 
 // 使用者還沒發過任何文字通報就先分享位置時的回覆。
 // 刻意不寫「之後會自動幫您附上」—— 這一版沒有暫存座標的機制，
@@ -147,7 +232,12 @@ async function processLineEvents(env: Env, events: LineEvent[]) {
       // 濫用情境，所以刻意不套用 LINE_RATE_LIMITER。
       if (event.type === "follow") {
         if (event.replyToken) {
-          await replyMessage(env, event.replyToken, WELCOME_TEXT);
+          await replyMessage(
+            env,
+            event.replyToken,
+            WELCOME_TEXT,
+            WELCOME_QUICK_REPLIES
+          );
         }
         continue;
       }
@@ -198,18 +288,28 @@ async function processLineEvents(env: Env, events: LineEvent[]) {
           });
 
       if (event.replyToken) {
-        // 還是資訊不足 → 明講還缺什麼並邀請補充；補齊了 → 照原本的確認訊息。
-        await replyMessage(
-          env,
-          event.replyToken,
-          caseRow.needs_human_verification === 1
-            ? buildFollowUpQuestionText(describeMissingFields(caseRow))
-            : buildConfirmationText(
-                caseRow.summary ?? fields.summary,
-                caseRow.confidence_score ?? 0,
-                caseRow.needs_human_verification === 1
-              )
-        );
+        // 還是資訊不足 → 明講還缺什麼並邀請補充，同時附上快速回覆按鈕讓不方便
+        // 打字的使用者直接按；補齊了 → 照原本的確認訊息，不需要按鈕。
+        // caseRow 可能來自「新建案件」或「supplementCase 補充後仍待複核」，
+        // 兩條路徑共用這一段，所以按鈕兩者都會帶上。
+        if (caseRow.needs_human_verification === 1) {
+          await replyMessage(
+            env,
+            event.replyToken,
+            buildFollowUpQuestionText(describeMissingFields(caseRow)),
+            buildQuickReplyItemsForMissingFields(getMissingFieldKeys(caseRow))
+          );
+        } else {
+          await replyMessage(
+            env,
+            event.replyToken,
+            buildConfirmationText(
+              caseRow.summary ?? fields.summary,
+              caseRow.confidence_score ?? 0,
+              caseRow.needs_human_verification === 1
+            )
+          );
+        }
       }
     } catch (err) {
       console.error("Error handling LINE event", err);

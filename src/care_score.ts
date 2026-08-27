@@ -154,6 +154,9 @@ export const CRITICAL_FIELDS: (keyof Pick<
   "volunteers_needed",
 ];
 
+/** CRITICAL_FIELDS 的元素型別，讓鍵名陣列能安全地拿去查標籤表。 */
+type CriticalField = (typeof CRITICAL_FIELDS)[number];
+
 export function computeConfidenceScore(row: CaseRow): number {
   const filled = CRITICAL_FIELDS.filter(
     (f) => row[f] !== null && row[f] !== undefined
@@ -176,13 +179,24 @@ const CRITICAL_FIELD_LABELS: Record<(typeof CRITICAL_FIELDS)[number], string> = 
 };
 
 /**
- * 還缺哪些關鍵欄位。判斷標準跟 computeConfidenceScore 完全一致 ——
- * 在那裡沒被算成「已填」的欄位，這裡就要說得出來，兩邊不能有落差。
+ * 還缺哪些關鍵欄位，回傳欄位鍵名（不是中文標籤）。
+ *
+ * 這是全專案唯一一處判斷「什麼叫沒填」的地方：describeMissingFields 的中文
+ * 標籤、以及 LINE 快速回覆按鈕要顯示哪幾組選項，全都從這裡衍生，判斷標準
+ * 也跟 computeConfidenceScore 一致，三邊不會各自漂移。
+ *
+ * 回傳型別比 string[] 窄，但對只要 string[] 的呼叫端完全相容；保留窄型別是
+ * 為了讓下面查 CRITICAL_FIELD_LABELS 時不需要任何轉型。
  */
-export function describeMissingFields(row: CaseRow): string[] {
+export function getMissingFieldKeys(row: CaseRow): CriticalField[] {
   return CRITICAL_FIELDS.filter(
     (f) => row[f] === null || row[f] === undefined
-  ).map((f) => CRITICAL_FIELD_LABELS[f]);
+  );
+}
+
+/** 還缺哪些關鍵欄位，轉成使用者看得懂的中文說法。 */
+export function describeMissingFields(row: CaseRow): string[] {
+  return getMissingFieldKeys(row).map((f) => CRITICAL_FIELD_LABELS[f]);
 }
 
 function round1(n: number): number {
