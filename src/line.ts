@@ -153,17 +153,30 @@ function buildQuickReplyItemsForMissingFields(
   return items;
 }
 
-// 使用者第一次加好友（follow 事件）時的自我介紹訊息。
-const WELCOME_TEXT =
-  "哈囉，歡迎加入「災後需求雷達」！\n\n這個機器人是用來通報淹水復原期間的生活需求，幫忙媒合志工協助。\n\n請直接用一段話描述您的狀況，包含以下資訊：\n・所在地區（例如：台南仁德）\n・年齡、是否獨居、是否行動不便\n・淹水深度\n・需要幾位志工協助\n・需要的協助類型（清淤、搬家具、飲用水、清潔用品、水電）\n・目前是否缺水缺電\n\n範例：\n「我住台南仁德，76歲，一個人住，家裡淹了60公分，需要兩個人幫忙搬家具，也沒有飲用水。」\n\n打好之後直接傳送就可以了，我們會盡快協助媒合志工。";
-
-// 歡迎訊息裡那顆「照著送一次看看」的按鈕。文字直接沿用 WELCOME_TEXT 內既有的
-// 範例句子（下方有執行期以外的一致性依據：兩者必須逐字相同，改一邊就要改另一邊）。
-const WELCOME_EXAMPLE_TEXT =
+// 範例通報句子。這是全檔唯一一份 —— 歡迎訊息與範例說明都從這裡引用，
+// 不再各自寫死一份，改一處就到處生效。
+const EXAMPLE_REPORT_TEXT =
   "我住台南仁德，76歲，一個人住，家裡淹了60公分，需要兩個人幫忙搬家具，也沒有飲用水。";
 
+/**
+ * 「我想看範例」的暗號文字。按鈕與 Rich Menu 都送這一句，
+ * processLineEvents 認出來之後只回範例說明 —— 不進 AI 抽取、不寫 D1。
+ *
+ * 以前按鈕直接送出 EXAMPLE_REPORT_TEXT 本身，於是每按一次就在資料庫留下
+ * 一筆假案件（台南仁德、76歲、獨居…），還會被重複偵測當成疑似重複去佔用
+ * 人工複核的時間。範例是「教學」，不是「通報」，不該進入案件流程。
+ */
+const EXAMPLE_TRIGGER_TEXT = "顯示範例訊息";
+
+const EXAMPLE_REPLY_TEXT = `這是範例格式，您可以參考這樣描述您的狀況：\n\n「${EXAMPLE_REPORT_TEXT}」\n\n照這個方式打好您自己的狀況後，直接傳送出來就可以囉！`;
+
+// 使用者第一次加好友（follow 事件）時的自我介紹訊息。
+const WELCOME_TEXT = `哈囉，歡迎加入「災後需求雷達」！\n\n這個機器人是用來通報淹水復原期間的生活需求，幫忙媒合志工協助。\n\n請直接用一段話描述您的狀況，包含以下資訊：\n・所在地區（例如：台南仁德）\n・年齡、是否獨居、是否行動不便\n・淹水深度\n・需要幾位志工協助\n・需要的協助類型（清淤、搬家具、飲用水、清潔用品、水電）\n・目前是否缺水缺電\n\n範例：\n「${EXAMPLE_REPORT_TEXT}」\n\n打好之後直接傳送就可以了，我們會盡快協助媒合志工。`;
+
+// 按鈕文字送的是暗號、不是範例句本身，所以按下去只會拿到格式說明，
+// 不會憑空生出一筆案件。label 維持原樣，使用者感受不到差別。
 const WELCOME_QUICK_REPLIES: QuickReplyItem[] = [
-  { label: "傳送範例文字看看", text: WELCOME_EXAMPLE_TEXT },
+  { label: "傳送範例文字看看", text: EXAMPLE_TRIGGER_TEXT },
 ];
 
 // 使用者還沒發過任何文字通報就先分享位置時的回覆。
@@ -268,6 +281,18 @@ async function processLineEvents(env: Env, events: LineEvent[]) {
           );
         }
         continue; // 跳過這則，不進入 AI 結構化跟寫入 D1
+      }
+
+      // 「顯示範例訊息」是按鈕/Rich Menu 送出的暗號，不是一筆通報。
+      // 在這裡就攔下來：不呼叫 extractFields、geocode、findPendingSupplementCase、
+      // insertCase 或 supplementCase 任何一個，所以不會多出案件、不會消耗 AI 額度。
+      // 用 === 完全相等而非包含比對 —— 真實通報裡若剛好提到這五個字，
+      // 不該被誤判成按鈕點擊而吃掉一筆真的求助。
+      if (text.trim() === EXAMPLE_TRIGGER_TEXT) {
+        if (event.replyToken) {
+          await replyMessage(env, event.replyToken, EXAMPLE_REPLY_TEXT);
+        }
+        continue;
       }
 
       const fields = await extractFields(env, text);
