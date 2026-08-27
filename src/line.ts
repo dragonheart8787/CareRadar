@@ -5,13 +5,20 @@ import {
   findPendingSupplementCase,
   insertCase,
   supplementCase,
+  supplementCaseLocation,
 } from "./db";
 
 interface LineEvent {
   type: string;
   replyToken?: string;
   source?: { type: string; userId?: string };
-  message?: { type: string; text?: string };
+  message?: {
+    type: string;
+    text?: string;
+    latitude?: number;
+    longitude?: number;
+    address?: string;
+  };
 }
 interface LineWebhookBody {
   destination: string;
@@ -73,6 +80,12 @@ async function replyMessage(env: Env, replyToken: string, text: string) {
 // 使用者第一次加好友（follow 事件）時的自我介紹訊息。
 const WELCOME_TEXT =
   "哈囉，歡迎加入「災後需求雷達」！\n\n這個機器人是用來通報淹水復原期間的生活需求，幫忙媒合志工協助。\n\n請直接用一段話描述您的狀況，包含以下資訊：\n・所在地區（例如：台南仁德）\n・年齡、是否獨居、是否行動不便\n・淹水深度\n・需要幾位志工協助\n・需要的協助類型（清淤、搬家具、飲用水、清潔用品、水電）\n・目前是否缺水缺電\n\n範例：\n「我住台南仁德，76歲，一個人住，家裡淹了60公分，需要兩個人幫忙搬家具，也沒有飲用水。」\n\n打好之後直接傳送就可以了，我們會盡快協助媒合志工。";
+
+// 使用者還沒發過任何文字通報就先分享位置時的回覆。
+// 刻意不寫「之後會自動幫您附上」—— 這一版沒有暫存座標的機制，
+// 對災民承諾一件程式其實沒做的事，比不回覆更糟。
+const LOCATION_WITHOUT_CASE_TEXT =
+  "已收到您分享的位置，不過目前還沒有可以對應的通報內容。\n\n麻煩先用一段文字說明您的狀況（所在地區、年齡、是否獨居、淹水深度、需要幾位志工協助），送出之後再分享一次位置，我們就能把座標附到您的案件上。";
 
 function buildConfirmationText(
   summary: string,
@@ -138,8 +151,15 @@ async function processLineEvents(env: Env, events: LineEvent[]) {
         }
         continue;
       }
+      // 分享位置：LINE 直接給的這組座標就是精確值，比拿文字去 Nominatim
+      // 猜地址準得多，所以直接採用、跳過 geocode()。它走的仍然是既有的
+      // 「補充既有案件」路徑，不是另一套平行的建案流程。
+      if (event.type === "message" && event.message?.type === "location") {
+        await processLocationEvent(env, event);
+        continue;
+      }
       if (event.type !== "message" || event.message?.type !== "text") {
-        continue; // 圖片/貼圖/位置訊息：MVP 先不處理，未來可用照片提升 confidence
+        continue; // 圖片/貼圖等其他類型：MVP 先不處理，未來可用照片提升 confidence
       }
       const text = event.message.text ?? "";
       const userId = event.source?.userId ?? null;
@@ -201,5 +221,65 @@ async function processLineEvents(env: Env, events: LineEvent[]) {
         );
       }
     }
+  }
+}
+
+/**
+ * 位置分享訊息。抽成獨立函式，是為了讓上面文字訊息那條主路徑一行都不用動。
+ * 呼叫端已經包在 try/catch 裡，這裡丟出的例外會走同一套錯誤回覆。
+ */
+async function processLocationEvent(env: Env, event: LineEvent) {
+  const lat = event.message?.latitude;
+  const lng = event.message?.longitude;
+  if (typeof lat !== "number" || typeof lng !== "number") {
+    return; // 沒有座標的位置訊息不該發生；真的發生就當作沒收到，不拿錯誤訊息去打擾使用者
+  }
+
+  const userId = event.source?.userId ?? null;
+
+  // 位置訊息跟文字訊息共用同一個限流 key，否則同一個人可以改發位置訊息
+  // 來繞過文字訊息的額度。
+  const { success } = await env.LINE_RATE_LIMITER.limit({
+    key: userId ?? "unknown",
+  });
+  if (!success) {
+    if (event.replyToken) {
+      await replyMessage(
+        env,
+        event.replyToken,
+        "您通報得有點頻繁，請稍後再試一次。"
+      );
+    }
+    return;
+  }
+
+  const pending = await findPendingSupplementCase(env, userId, 15);
+  if (!pending) {
+    // 還沒有任何文字描述就先分享位置：沒有需求類型、沒有人數，建不出一筆
+    // 有意義的案件，這版也不做座標暫存，所以完全不寫入 D1，只回覆提示。
+    if (event.replyToken) {
+      await replyMessage(env, event.replyToken, LOCATION_WITHOUT_CASE_TEXT);
+    }
+    return;
+  }
+
+  const fuzzed = fuzzLocation(lat, lng);
+  await supplementCaseLocation(
+    env,
+    pending.id,
+    { lat, lng },
+    fuzzed,
+    // address 是 LINE 自己對這組座標的地址描述，不是使用者打的字。
+    event.message?.address ?? "分享位置"
+  );
+
+  // 座標本身不改變「還缺哪些關鍵欄位」的判斷，所以不重跑
+  // buildFollowUpQuestionText / buildConfirmationText 那套邏輯，只做簡短確認。
+  if (event.replyToken) {
+    await replyMessage(
+      env,
+      event.replyToken,
+      "已收到您分享的位置，會用來協助志工找到正確地點。"
+    );
   }
 }

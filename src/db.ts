@@ -361,6 +361,49 @@ export async function supplementCase(
   return updated;
 }
 
+/**
+ * 專門補充「使用者直接分享 LINE 位置」得到的精確座標。
+ *
+ * 跟 supplementCase 刻意分開成兩個函式：那一個處理的是 AI 從文字抽出來的
+ * 一整組 ExtractedFields，位置分享根本沒有那組欄位，硬套只會逼出一堆假的
+ * null 去參與合併。這裡只做一件事 —— 案件還沒有座標時，把座標與地址描述填進去。
+ *
+ * 一樣遵守全檔一致的「只填空，不覆蓋」原則：已經有精確座標就整筆不動，
+ * 連 updated_at 都不碰 —— 什麼都沒改卻推進時間戳記，會把
+ * findPendingSupplementCase 的 15 分鐘補充視窗無謂地往後延。
+ */
+export async function supplementCaseLocation(
+  env: Env,
+  caseId: number,
+  exact: { lat: number; lng: number },
+  fuzzed: { lat: number; lng: number },
+  addressText: string
+): Promise<CaseRow | null> {
+  const existing = await getCase(env, caseId);
+  if (!existing) return null;
+
+  if (existing.exact_lat !== null || existing.exact_lng !== null) {
+    return existing;
+  }
+
+  const updated = await env.DB.prepare(
+    `UPDATE cases SET
+       location_text = ?, exact_lat = ?, exact_lng = ?,
+       public_lat = ?, public_lng = ?,
+       updated_at = datetime('now')
+     WHERE id = ?
+     RETURNING *`
+  )
+    .bind(addressText, exact.lat, exact.lng, fuzzed.lat, fuzzed.lng, caseId)
+    .first<CaseRow>();
+
+  if (!updated) return null;
+
+  await logHistory(env, caseId, "supplemented", "location_share");
+
+  return updated;
+}
+
 function parseNeedTypes(json: string | null): string[] {
   if (!json) return [];
   try {
