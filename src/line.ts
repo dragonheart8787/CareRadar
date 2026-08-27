@@ -75,7 +75,37 @@ async function replyMessage(
   quickReplyItems?: QuickReplyItem[]
 ) {
   if (!env.LINE_CHANNEL_ACCESS_TOKEN) return;
+  await sendToLine(env, "reply", {
+    replyToken,
+    messages: [buildTextMessage(text, quickReplyItems)],
+  });
+}
 
+/**
+ * Push API：主動推播，不需要 replyToken。
+ *
+ * 只在「replyToken 已經被前面那則即時緊急提醒用掉」時才會走這裡 ——
+ * LINE 規定一個 replyToken 只能回一次，第二次呼叫 Reply API 會被拒絕、
+ * 訊息就這樣消失了。
+ */
+async function pushMessage(
+  env: Env,
+  userId: string,
+  text: string,
+  quickReplyItems?: QuickReplyItem[]
+) {
+  if (!env.LINE_CHANNEL_ACCESS_TOKEN) return;
+  await sendToLine(env, "push", {
+    to: userId,
+    messages: [buildTextMessage(text, quickReplyItems)],
+  });
+}
+
+/** Reply 與 Push 的訊息物件格式相同，共用同一份建構邏輯，避免兩邊各自漂移。 */
+function buildTextMessage(
+  text: string,
+  quickReplyItems?: QuickReplyItem[]
+): Record<string, unknown> {
   const message: Record<string, unknown> = { type: "text", text };
   // 刻意檢查 length 而不只是「有沒有傳」：LINE 規定 quickReply.items 至少 1 筆，
   // 送空陣列整則訊息會被退回 —— 那會讓追問訊息整個發不出去。缺的欄位剛好
@@ -88,14 +118,21 @@ async function replyMessage(
       })),
     };
   }
+  return message;
+}
 
-  await fetch("https://api.line.me/v2/bot/message/reply", {
+async function sendToLine(
+  env: Env,
+  endpoint: "reply" | "push",
+  body: Record<string, unknown>
+) {
+  await fetch(`https://api.line.me/v2/bot/message/${endpoint}`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${env.LINE_CHANNEL_ACCESS_TOKEN}`,
     },
-    body: JSON.stringify({ replyToken, messages: [message] }),
+    body: JSON.stringify(body),
   });
 }
 
@@ -189,6 +226,38 @@ const WELCOME_QUICK_REPLIES: QuickReplyItem[] = [
  */
 const EMERGENCY_REDIRECT_TEXT =
   "⚠️ 如果目前有立即的生命危險（例如受困、溺水、昏迷、嚴重外傷），請立刻撥打119（消防/救護）或110（警察），不要等待志工媒合，這個系統無法提供緊急救援。";
+
+/**
+ * 第一層（關鍵字）緊急判斷用的字詞。
+ *
+ * 這份清單刻意保守：只收「幾乎不可能出現在一般淹水災情描述裡」的字。
+ * 放寬的代價不是多幾則訊息，而是提醒本身失效 —— 如果每一則通報都跳出
+ * 119/110，使用者三則之後就不會再讀它，真正緊急的那一則也一起被忽略。
+ * 寧可漏判，交給後面 AI 那層再抓一次。
+ */
+const EMERGENCY_KEYWORDS = [
+  "溺水",
+  "溺斃",
+  "受困",
+  "困住出不去",
+  "昏迷",
+  "沒有呼吸",
+  "呼吸困難",
+  "心跳停止",
+  "大量出血",
+  "快死了",
+  "快不行了",
+  "來不及了",
+  "救命",
+];
+
+/**
+ * 純 substring 比對，不斷詞、不正規化。這一層的價值全在「零外部呼叫、
+ * 零等待」，精準度由後面 AI 那層負責，所以這裡不值得為了少數誤判付出延遲。
+ */
+function containsEmergencyKeyword(text: string): boolean {
+  return EMERGENCY_KEYWORDS.some((keyword) => text.includes(keyword));
+}
 
 // 使用者還沒發過任何文字通報就先分享位置時的回覆。
 // 刻意不寫「之後會自動幫您附上」—— 這一版沒有暫存座標的機制，
@@ -306,6 +375,16 @@ async function processLineEvents(env: Env, events: LineEvent[]) {
         continue;
       }
 
+      // 第一層緊急判斷：純字串比對，不等 AI、不等 geocode、不等 D1 —— 收到訊息
+      // 後幾乎立刻就能把 119/110 送到使用者眼前。後面 AI 判斷出的
+      // emergency_signal 是完全獨立的第二層，兩層只做加法、不互相抵銷：
+      // 都命中就會收到兩則提醒，重複提醒的代價遠低於漏掉一次。
+      let replyTokenUsed = false;
+      if (event.replyToken && containsEmergencyKeyword(text)) {
+        await replyMessage(env, event.replyToken, EMERGENCY_REDIRECT_TEXT);
+        replyTokenUsed = true;
+      }
+
       const fields = await extractFields(env, text);
       const exact = await geocode(fields.location_text);
       const fuzzed = exact ? fuzzLocation(exact.lat, exact.lng) : null;
@@ -344,15 +423,23 @@ async function processLineEvents(env: Env, events: LineEvent[]) {
           ? EMERGENCY_REDIRECT_TEXT + "\n\n" + baseText
           : baseText;
 
-        if (caseRow.needs_human_verification === 1) {
-          await replyMessage(
-            env,
-            event.replyToken,
-            replyText,
-            buildQuickReplyItemsForMissingFields(getMissingFieldKeys(caseRow))
-          );
+        // 資訊不足才帶快速回覆按鈕；補齊了就只回確認訊息。
+        const quickReplies =
+          caseRow.needs_human_verification === 1
+            ? buildQuickReplyItemsForMissingFields(getMissingFieldKeys(caseRow))
+            : undefined;
+
+        if (!replyTokenUsed) {
+          await replyMessage(env, event.replyToken, replyText, quickReplies);
+        } else if (userId) {
+          // replyToken 剛剛已經用在即時緊急提醒上，只能改用 Push API。
+          await pushMessage(env, userId, replyText, quickReplies);
         } else {
-          await replyMessage(env, event.replyToken, replyText);
+          // 拿不到 userId 就沒有 Push 的對象，這則送不出去。實務上使用者訊息
+          // 一定帶 userId，走到這裡代表事件格式異常，留一筆記錄以免無聲消失。
+          console.error(
+            "Emergency reply consumed replyToken but no userId to push to"
+          );
         }
       }
     } catch (err) {
