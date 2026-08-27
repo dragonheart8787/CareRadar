@@ -1,6 +1,14 @@
 import type { CaseRow, ClaimResult, Env, ExtractedFields } from "./types";
 import { computeConfidenceScore, needsHumanVerification } from "./care_score";
 
+/**
+ * claim token 的有效時數。72 小時是對齊這個專案 MVP 本來就定義的範圍
+ * ——「淹水退水後 72 小時內的生活復原階段」，不是隨意挑的數字。
+ * 用 volunteer_claims.claimed_at 現算，不另外存到期時間戳記，
+ * 所以調整這個值不需要對正式環境的 D1 做任何 schema 變更。
+ */
+const CLAIM_TOKEN_VALID_HOURS = 72;
+
 export async function logHistory(
   env: Env,
   caseId: number,
@@ -427,7 +435,12 @@ export async function claimCase(
 
 /**
  * 驗證認領憑證：把傳入的 token 用同樣的 SHA-256 雜湊，比對 volunteer_claims
- * 裡是否有 case_id 與 claim_token_hash 都相符的紀錄。
+ * 裡是否有 case_id 與 claim_token_hash 都相符、且仍在有效期內的紀錄，
+ * 同時要求該案件尚未被關閉。
+ *
+ * 三種失敗情形（token 不符、已過期、案件已被判定重複而合併關閉）**一律回傳
+ * 同一個 false**，刻意不區分也不對外透露是哪一種 —— 否則等於告訴外部
+ * 「你這組 token 曾經是有效的」或「這筆案件被合併了」，洩漏內部狀態。
  */
 export async function verifyClaimToken(
   env: Env,
@@ -437,11 +450,14 @@ export async function verifyClaimToken(
   if (!token) return false;
   const hash = await sha256Hex(token);
   const row = await env.DB.prepare(
-    `SELECT id FROM volunteer_claims
-     WHERE case_id = ? AND claim_token_hash = ?
+    `SELECT vc.id FROM volunteer_claims vc
+     JOIN cases c ON c.id = vc.case_id
+     WHERE vc.case_id = ? AND vc.claim_token_hash = ?
+       AND vc.claimed_at > datetime('now', '-' || ? || ' hours')
+       AND c.status != 'closed'
      LIMIT 1`
   )
-    .bind(caseId, hash)
+    .bind(caseId, hash, CLAIM_TOKEN_VALID_HOURS)
     .first<{ id: number }>();
   return row !== null;
 }
