@@ -554,7 +554,7 @@ export async function verifyClaimToken(
      JOIN cases c ON c.id = vc.case_id
      WHERE vc.case_id = ? AND vc.claim_token_hash = ?
        AND vc.claimed_at > datetime('now', '-' || ? || ' hours')
-       AND c.status != 'closed'
+       AND c.status NOT IN ('closed', 'completed')
      LIMIT 1`
   )
     .bind(caseId, hash, CLAIM_TOKEN_VALID_HOURS)

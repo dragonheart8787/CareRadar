@@ -273,7 +273,8 @@ function renderMarkers(cases){
   markers = [];
   cases.forEach(c => {
     if (!c.public_lat || !c.public_lng) return;
-    const color = c.status === 'full' ? '#3d4758' : scoreTierColor(c.score_breakdown.total);
+    const color = (c.status === 'full' || c.status === 'completed')
+      ? '#3d4758' : scoreTierColor(c.score_breakdown.total);
     const marker = L.circleMarker([c.public_lat, c.public_lng], {
       radius: 9, color, fillColor: color, fillOpacity: 0.75, weight: 2,
     }).addTo(map);
