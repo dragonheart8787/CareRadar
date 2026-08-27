@@ -56,7 +56,7 @@ export interface CaseRow {
   confidence_score: number | null;
   needs_human_verification: number;
   possible_duplicate_of: number | null;
-  status: "open" | "full" | "closed";
+  status: "open" | "full" | "closed" | "completed";
   reported_at: string;
   updated_at: string;
 }

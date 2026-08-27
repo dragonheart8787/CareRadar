@@ -170,6 +170,8 @@ function renderList(cases){
   cases.forEach((c, i) => {
     const needTypes = (c.need_types_parsed || []).map(needTypeLabel).join(' · ');
     const isFull = c.status === 'full';
+    // 已完成的案件視覺上比照額滿（半透明），但不再提供任何互動 —— 案件結案了。
+    const isCompleted = c.status === 'completed';
     const b = c.score_breakdown;
     // 用「加權後的貢獻值」畫比例，不是未加權的原始分量 —— 否則畫面上的
     // 比例會跟這四項對總分的實際貢獻不一致，等於畫一張會騙人的圖。
@@ -178,13 +180,14 @@ function renderList(cases){
       b.urgency_contribution + b.resource_gap_contribution, 1);
     const claimToken = readClaimToken(c.id);
     const card = document.createElement('div');
-    card.className = 'card' + (isFull ? ' full' : '');
+    card.className = 'card' + (isFull || isCompleted ? ' full' : '');
     card.innerHTML = \`
       <div class="card-top">
         <div>
           <span class="rank">#\${i + 1}</span>
           <div class="summary">\${c.summary || c.raw_text}</div>
           <div class="tags">
+            \${isCompleted ? '<span class="tag ok">已完成</span>' : ''}
             \${isFull ? '<span class="tag ok">已額滿</span>' : ''}
             \${c.needs_human_verification ? '<span class="tag warn">資訊待複核</span>' : ''}
             \${needTypes ? '<span class="tag">' + needTypes + '</span>' : ''}
@@ -204,10 +207,9 @@ function renderList(cases){
       <div class="score-breakdown-text">脆弱程度 +\${b.vulnerability_contribution.toFixed(1)} · 災害程度 +\${b.severity_contribution.toFixed(1)} · 等待時間 +\${b.urgency_contribution.toFixed(1)} · 人力缺口 +\${b.resource_gap_contribution.toFixed(1)}</div>
       <div class="claim-row">
         <span class="slots">志工 \${c.volunteers_assigned}/\${c.volunteers_needed}</span>
-        <input type="text" placeholder="你的稱呼（選填）" id="name-\${c.id}" \${isFull ? 'disabled' : ''}/>
-        <button data-id="\${c.id}" \${isFull ? 'disabled' : ''}>我要認領</button>
+        \${isCompleted ? '' : '<input type="text" placeholder="你的稱呼（選填）" id="name-' + c.id + '"' + (isFull ? ' disabled' : '') + '/><button data-id="' + c.id + '"' + (isFull ? ' disabled' : '') + '>我要認領</button>'}
       </div>
-      \${claimToken ? '<div class="addr-row"><button class="addr-btn">查看精確地址</button><div class="addr-out" id="addr-' + c.id + '"></div></div>' : ''}
+      \${claimToken && !isCompleted ? '<div class="addr-row"><button class="addr-btn">查看精確地址</button><button class="complete-btn">回報完成</button><div class="addr-out" id="addr-' + c.id + '"></div></div>' : ''}
     \`;
     card.addEventListener('click', (e) => {
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'BUTTON') return;
@@ -215,6 +217,7 @@ function renderList(cases){
     });
     card.querySelector('button')?.addEventListener('click', () => claimCase(c.id));
     card.querySelector('.addr-btn')?.addEventListener('click', () => showAddress(c.id));
+    card.querySelector('.complete-btn')?.addEventListener('click', () => completeCase(c.id));
     list.appendChild(card);
   });
 }
@@ -316,6 +319,28 @@ function readClaimToken(id){
 
 function writeClaimToken(id, token){
   try { localStorage.setItem('claim_token_' + id, token); } catch {}
+}
+
+function clearClaimToken(id){
+  try { localStorage.removeItem('claim_token_' + id); } catch {}
+}
+
+async function completeCase(id){
+  const token = readClaimToken(id);
+  if (!token) return;
+  if (!confirm('確定這個案件已經處理完成了嗎？')) return;
+  const res = await fetch('/api/cases/' + id + '/complete', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token }),
+  });
+  if (!res.ok) {
+    alert('回報失敗，可能是認領憑證已失效，或這個案件已經結案了。');
+    return;
+  }
+  // 案件結案了，本機留著 token 也沒有用途。
+  clearClaimToken(id);
+  refresh();
 }
 
 async function showAddress(id){

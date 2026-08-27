@@ -362,6 +362,38 @@ export async function supplementCase(
 }
 
 /**
+ * 志工憑 claim token 回報「這個案件已經處理完成」。
+ *
+ * status IN ('open', 'full') 這個條件同時擋掉三件事：案件不存在、已經被
+ * admin 判定重複而 closed、以及重複回報完成。判斷靠 meta.changes，
+ * 不先 SELECT 再 UPDATE —— 兩位志工同時回報時不會有競態條件。
+ *
+ * 回傳 null 時刻意不區分「token 不對」與「案件已經結案」，跟 address
+ * 端點同一套慣例，避免外部靠回應差異推敲案件狀態。
+ */
+export async function markCaseCompleted(
+  env: Env,
+  caseId: number,
+  token: string
+): Promise<CaseRow | null> {
+  const authorized = await verifyClaimToken(env, caseId, token);
+  if (!authorized) return null;
+
+  const updateResult = await env.DB.prepare(
+    `UPDATE cases SET status = 'completed', updated_at = datetime('now')
+     WHERE id = ? AND status IN ('open', 'full')`
+  )
+    .bind(caseId)
+    .run();
+
+  if (!updateResult.meta.changes) return null;
+
+  await logHistory(env, caseId, "completed");
+
+  return getCase(env, caseId);
+}
+
+/**
  * 專門補充「使用者直接分享 LINE 位置」得到的精確座標。
  *
  * 跟 supplementCase 刻意分開成兩個函式：那一個處理的是 AI 從文字抽出來的

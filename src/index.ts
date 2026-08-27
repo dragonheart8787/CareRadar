@@ -5,6 +5,7 @@ import {
   getCase,
   listCases,
   listPossibleDuplicates,
+  markCaseCompleted,
   resolveDuplicate,
   verifyClaimToken,
 } from "./db";
@@ -195,6 +196,31 @@ export default {
         }),
         { headers: JSON_HEADERS }
       );
+    }
+
+    // 認領者回報「處理完成」。憑同一組 claim token，不需要另外的身份驗證 ——
+    // 能出示 token 就代表當初認領過這個案件。
+    const completeMatch = url.pathname.match(/^\/api\/cases\/(\d+)\/complete$/);
+    if (request.method === "POST" && completeMatch) {
+      const caseId = parseInt(completeMatch[1], 10);
+      let body: { token?: string } = {};
+      try {
+        body = await request.json();
+      } catch {
+        // 解析失敗就留空物件，下面的 token 驗證會擋掉
+      }
+      const updated = await markCaseCompleted(env, caseId, body.token ?? "");
+      if (!updated) {
+        // 刻意不區分「token 不對」與「案件已經結案／不存在」，
+        // 跟 address 端點同一套慣例，避免用回應差異推敲案件狀態。
+        return new Response(
+          JSON.stringify({ error: "invalid token or case already resolved" }),
+          { status: 403, headers: JSON_HEADERS }
+        );
+      }
+      return new Response(JSON.stringify(toApiCase(updated)), {
+        headers: JSON_HEADERS,
+      });
     }
 
     // 後台：疑似重複案件複核頁。回應一律不透露頁面內容或金鑰格式。
