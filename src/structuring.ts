@@ -34,6 +34,11 @@ const EXTRACTION_SCHEMA = {
     },
     volunteers_needed: { type: ["integer", "null"], description: "需要幾位志工協助" },
     summary: { type: "string", description: "一句話中文摘要，給志工快速判讀" },
+    emergency_signal: {
+      type: "boolean",
+      description:
+        "文字中是否透露立即性生命危險，例如受困無法脫身、溺水、昏迷、嚴重外傷持續出血、無法呼吸、意識不清等當下需要119/110立即介入的狀況——單純淹水嚴重、等待救援時間長、家中損失嚴重，不算在這個範圍內，那些是既有的 Severity/Urgency 在處理的事",
+    },
   },
   required: [
     "location_text",
@@ -48,6 +53,7 @@ const EXTRACTION_SCHEMA = {
     "need_types",
     "volunteers_needed",
     "summary",
+    "emergency_signal",
   ],
 } as const;
 
@@ -67,7 +73,12 @@ const SYSTEM_PROMPT = `你是災後需求通報的結構化助手。任務是把
     cleaning_supplies        → 例如：清潔用品、消毒、打掃用具
     water_electricity_repair → 例如：水電、修電線、通水管
     other                    → 上述都不符合時才用這個
-- summary 用一句話繁體中文摘要，包含地區、人數、最急迫的需求，給志工在3秒內看懂。`;
+- summary 用一句話繁體中文摘要，包含地區、人數、最急迫的需求，給志工在3秒內看懂。
+- emergency_signal 只在文字透露「當下就有立即生命危險」時才填 true，例如受困無法脫身、
+  溺水、昏迷、意識不清、嚴重外傷持續出血、無法呼吸，這些是需要119/110立即介入的狀況。
+  請嚴格區分「嚴重」與「立即危及生命」：淹水很深、等待很久、家具全毀、停水停電、
+  年紀大又獨居，這些再嚴重都不算，它們由系統既有的 Severity/Urgency 處理。
+  判斷不確定時一律填 false。`;
 
 export async function extractFields(
   env: Env,
@@ -113,6 +124,9 @@ export async function extractFields(
     volunteers_needed:
       typeof parsed.volunteers_needed === "number" ? parsed.volunteers_needed : null,
     summary: typeof parsed.summary === "string" ? parsed.summary : rawText.slice(0, 60),
+    // 不確定就當作沒有：預設 true 會讓每一則通報都掛上緊急提醒，
+    // 警告一旦變成雜訊，真正緊急的那則就沒人看了。
+    emergency_signal: parsed.emergency_signal === true,
   };
 }
 

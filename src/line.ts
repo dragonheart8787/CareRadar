@@ -179,6 +179,17 @@ const WELCOME_QUICK_REPLIES: QuickReplyItem[] = [
   { label: "傳送範例文字看看", text: EXAMPLE_TRIGGER_TEXT },
 ];
 
+/**
+ * 疑似立即生命危險時，附加在回覆最前面的導向提醒。
+ *
+ * 這是「盡力而為的補充」，不是可靠的緊急偵測：判斷來自 LLM，會漏判也會誤判。
+ * 所以它只加訊息、不改變任何處理流程 —— 案件照建、Care Score 照算、
+ * 限流照套。它存在的目的只有一個：萬一有人把真正的急難打進這個
+ * 不是為急難設計的系統，至少讓他看到 119/110 這五個字。
+ */
+const EMERGENCY_REDIRECT_TEXT =
+  "⚠️ 如果目前有立即的生命危險（例如受困、溺水、昏迷、嚴重外傷），請立刻撥打119（消防/救護）或110（警察），不要等待志工媒合，這個系統無法提供緊急救援。";
+
 // 使用者還沒發過任何文字通報就先分享位置時的回覆。
 // 刻意不寫「之後會自動幫您附上」—— 這一版沒有暫存座標的機制，
 // 對災民承諾一件程式其實沒做的事，比不回覆更糟。
@@ -317,23 +328,31 @@ async function processLineEvents(env: Env, events: LineEvent[]) {
         // 打字的使用者直接按；補齊了 → 照原本的確認訊息，不需要按鈕。
         // caseRow 可能來自「新建案件」或「supplementCase 補充後仍待複核」，
         // 兩條路徑共用這一段，所以按鈕兩者都會帶上。
+        const baseText =
+          caseRow.needs_human_verification === 1
+            ? buildFollowUpQuestionText(describeMissingFields(caseRow))
+            : buildConfirmationText(
+                caseRow.summary ?? fields.summary,
+                caseRow.confidence_score ?? 0,
+                caseRow.needs_human_verification === 1
+              );
+
+        // 疑似立即生命危險 → 把導向 119/110 的提醒放在最前面。放最前面是刻意的：
+        // 使用者在 LINE 只會看到訊息開頭那幾行，擺在結尾等於沒說。
+        // 這只影響回覆文字，案件建立與評分完全不受影響。
+        const replyText = fields.emergency_signal
+          ? EMERGENCY_REDIRECT_TEXT + "\n\n" + baseText
+          : baseText;
+
         if (caseRow.needs_human_verification === 1) {
           await replyMessage(
             env,
             event.replyToken,
-            buildFollowUpQuestionText(describeMissingFields(caseRow)),
+            replyText,
             buildQuickReplyItemsForMissingFields(getMissingFieldKeys(caseRow))
           );
         } else {
-          await replyMessage(
-            env,
-            event.replyToken,
-            buildConfirmationText(
-              caseRow.summary ?? fields.summary,
-              caseRow.confidence_score ?? 0,
-              caseRow.needs_human_verification === 1
-            )
-          );
+          await replyMessage(env, event.replyToken, replyText);
         }
       }
     } catch (err) {
