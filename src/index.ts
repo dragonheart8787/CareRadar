@@ -43,14 +43,49 @@ function safeParseArray(json: string | null): string[] {
 
 const JSON_HEADERS = { "content-type": "application/json; charset=utf-8" };
 
+/** 401 時要帶這個 header，瀏覽器看到才會跳出帳號密碼輸入視窗。 */
+const BASIC_AUTH_CHALLENGE = { "WWW-Authenticate": 'Basic realm="CareRadar Admin"' };
+
 /**
- * 後台授權：ADMIN_KEY 沒設定就一律拒絕（fail-closed），不會變成「沒設就不用驗」。
- * 比對重用 line.ts 那份常數時間比對，避免用 === 洩漏前綴資訊。
+ * 後台授權：HTTP Basic Auth。
+ *
+ * 用 Basic Auth 而不是網址上的 ?key=，是因為 query string 會留在瀏覽器歷史、
+ * 分享出去的連結、以及沿路每一層代理伺服器的存取日誌裡 —— 金鑰等於到處都是。
+ * Basic Auth 的憑證放在 header，瀏覽器登入一次後會自動附加在後續請求上，
+ * 頁面本身也就不需要把金鑰嵌進 JavaScript 給人看到。
+ *
+ * 帳號不檢查（填什麼都行），只驗密碼。ADMIN_KEY 沒設定一律拒絕（fail-closed）。
  */
-function isAdminAuthorized(env: Env, providedKey: string): boolean {
+function isAuthorizedViaBasicAuth(request: Request, env: Env): boolean {
   if (!env.ADMIN_KEY) return false;
-  if (!providedKey) return false;
-  return timingSafeEqual(env.ADMIN_KEY, providedKey);
+
+  const header = request.headers.get("authorization");
+  if (!header) return false;
+
+  // scheme 依 RFC 7617 不分大小寫；瀏覽器都送 "Basic"，但別假設只有瀏覽器會來。
+  const [scheme, encoded] = header.split(" ");
+  if (!scheme || scheme.toLowerCase() !== "basic" || !encoded) return false;
+
+  let credentials: string;
+  try {
+    // atob 回傳的是 binary string，非 ASCII 的金鑰要再解一次 UTF-8 才會正確，
+    // 否則設了中文/emoji 金鑰的人會怎麼輸入都登不進來。
+    const binary = atob(encoded);
+    credentials = new TextDecoder().decode(
+      Uint8Array.from(binary, (c) => c.charCodeAt(0))
+    );
+  } catch {
+    return false; // base64 壞掉
+  }
+
+  // 只切第一個冒號：密碼本身允許包含冒號。
+  const separator = credentials.indexOf(":");
+  if (separator === -1) return false;
+  const password = credentials.slice(separator + 1);
+  if (!password) return false;
+
+  // 常數時間比對，避免用 === 洩漏前綴資訊。
+  return timingSafeEqual(env.ADMIN_KEY, password);
 }
 
 export default {
@@ -164,12 +199,14 @@ export default {
 
     // 後台：疑似重複案件複核頁。回應一律不透露頁面內容或金鑰格式。
     if (request.method === "GET" && url.pathname === "/admin/duplicates") {
-      const key = url.searchParams.get("key") ?? "";
-      if (!isAdminAuthorized(env, key)) {
-        return new Response("unauthorized", { status: 401 });
+      if (!isAuthorizedViaBasicAuth(request, env)) {
+        return new Response("unauthorized", {
+          status: 401,
+          headers: BASIC_AUTH_CHALLENGE,
+        });
       }
       const pairs = await listPossibleDuplicates(env);
-      return new Response(renderDuplicatesHtml(pairs, key), {
+      return new Response(renderDuplicatesHtml(pairs), {
         headers: { "content-type": "text/html; charset=utf-8" },
       });
     }
@@ -178,14 +215,17 @@ export default {
       /^\/api\/admin\/duplicates\/(\d+)\/resolve$/
     );
     if (request.method === "POST" && resolveMatch) {
-      let body: { action?: string; key?: string } = {};
+      // 授權先於解析 body：沒通過就不該讓未授權請求觸發任何後續處理。
+      if (!isAuthorizedViaBasicAuth(request, env)) {
+        // 這個端點不帶 WWW-Authenticate —— 那是給瀏覽器導覽用的，
+        // 頁面上的 fetch 會自動附上先前登入快取的憑證。
+        return new Response("unauthorized", { status: 401 });
+      }
+      let body: { action?: string } = {};
       try {
         body = await request.json();
       } catch {
-        // 解析失敗就留空物件，下面的授權檢查會擋掉
-      }
-      if (!isAdminAuthorized(env, body.key ?? "")) {
-        return new Response("unauthorized", { status: 401 });
+        // 解析失敗就留空物件，下面的 action 檢查會擋掉
       }
       if (body.action !== "merge" && body.action !== "not_duplicate") {
         return new Response(JSON.stringify({ error: "invalid action" }), {

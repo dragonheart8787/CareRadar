@@ -35,12 +35,8 @@ function renderCaseColumn(
 }
 
 export function renderDuplicatesHtml(
-  pairs: Array<{ duplicate: CaseRow; original: CaseRow | null }>,
-  adminKey: string
+  pairs: Array<{ duplicate: CaseRow; original: CaseRow | null }>
 ): string {
-  // JSON.stringify 不會逸出 "</script>"，額外把 < 轉成 < 才不會提早結束 script。
-  const keyLiteral = JSON.stringify(adminKey).replace(/</g, "\\u003c");
-
   const body = pairs.length
     ? pairs
         .map(
@@ -122,8 +118,8 @@ export function renderDuplicatesHtml(
 ${body}
 
 <script>
-const ADMIN_KEY = ${keyLiteral};
-
+// 這裡刻意沒有任何金鑰：頁面靠 HTTP Basic Auth 授權，瀏覽器會自動把憑證
+// 附加在同源請求上，包含下面這個 fetch。
 document.querySelectorAll('button[data-id]').forEach((btn) => {
   btn.addEventListener('click', async () => {
     const id = btn.dataset.id;
@@ -133,14 +129,14 @@ document.querySelectorAll('button[data-id]').forEach((btn) => {
       const res = await fetch('/api/admin/duplicates/' + id + '/resolve', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action, key: ADMIN_KEY }),
+        body: JSON.stringify({ action }),
       });
       if (!res.ok) {
         alert('處理失敗（HTTP ' + res.status + '），請重新整理後再試。');
         document.querySelectorAll('button[data-id]').forEach(b => b.disabled = false);
         return;
       }
-      // 重新 GET 同一個網址（query string 裡的 key 會一起帶著）。
+      // 重新 GET 同一個網址；Basic Auth 憑證由瀏覽器自動帶上。
       location.reload();
     } catch (err) {
       alert('連線失敗，請重新整理後再試。');
