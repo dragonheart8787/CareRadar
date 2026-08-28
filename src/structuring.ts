@@ -74,6 +74,8 @@ const SYSTEM_PROMPT = `你是災後需求通報的結構化助手。任務是把
     water_electricity_repair → 例如：水電、修電線、通水管
     other                    → 上述都不符合時才用這個
 - summary 用一句話繁體中文摘要，包含地區、人數、最急迫的需求，給志工在3秒內看懂。
+  地區請只用縣市/鄉鎮區等級（例如「台南仁德」），絕對不要在摘要中包含詳細街道、
+  門牌號碼等可定位到特定住戶的資訊。
 - emergency_signal 只在文字透露「當下就有立即生命危險」時才填 true，例如受困無法脫身、
   溺水、昏迷、意識不清、嚴重外傷持續出血、無法呼吸，這些是需要119/110立即介入的狀況。
   請嚴格區分「嚴重」與「立即危及生命」：淹水很深、等待很久、家具全毀、停水停電、
@@ -123,7 +125,13 @@ export async function extractFields(
     need_types: Array.isArray(parsed.need_types) ? parsed.need_types : [],
     volunteers_needed:
       typeof parsed.volunteers_needed === "number" ? parsed.volunteers_needed : null,
-    summary: typeof parsed.summary === "string" ? parsed.summary : rawText.slice(0, 60),
+    // 抽取失敗時**不能**拿 rawText 當 fallback —— summary 會出現在公開的
+    // /api/cases 回應裡，而使用者原話開頭通常就是完整地址。寧可顯示一句
+    // 沒有資訊量的固定字串，也不要把原始輸入洩漏到公開端點。
+    summary:
+      typeof parsed.summary === "string"
+        ? parsed.summary
+        : "災後需求通報（摘要產生失敗，請由後台人工複核原始內容）",
     // 不確定就當作沒有：預設 true 會讓每一則通報都掛上緊急提醒，
     // 警告一旦變成雜訊，真正緊急的那則就沒人看了。
     emergency_signal: parsed.emergency_signal === true,

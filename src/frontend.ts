@@ -190,7 +190,7 @@ function renderList(cases){
       <div class="card-top">
         <div>
           <span class="rank">#\${i + 1}</span>
-          <div class="summary">\${c.summary || c.raw_text}</div>
+          <div class="summary">\${c.summary || '（尚無摘要）'}</div>
           <div class="tags">
             \${isCompleted ? '<span class="tag ok">已完成</span>' : ''}
             \${isFull ? '<span class="tag ok">已額滿</span>' : ''}
@@ -264,8 +264,9 @@ function renderReviewPanel(cases){
     wait.className = 'review-wait';
     wait.textContent = '已等待 ' + hoursWaited(c.reported_at).toFixed(1) + ' 小時';
     const text = document.createElement('span');
-    // 用 textContent：summary / raw_text 都是使用者通報的自由文字。
-    text.textContent = c.summary || c.raw_text;
+    // 用 textContent：summary 是使用者通報衍生的自由文字。
+    // raw_text 不在公開 API 回應裡，所以 fallback 用固定字串而不是原文。
+    text.textContent = c.summary || '（尚無摘要）';
     row.appendChild(wait);
     row.appendChild(text);
     box.appendChild(row);
@@ -286,7 +287,7 @@ function renderMarkers(cases){
     }).addTo(map);
     marker.bindPopup(
       '<b>Care Score: ' + c.score_breakdown.total.toFixed(1) + '</b><br>' +
-      (c.summary || c.raw_text) + '<br>志工 ' + c.volunteers_assigned + '/' + c.volunteers_needed
+      (c.summary || '（尚無摘要）') + '<br>志工 ' + c.volunteers_assigned + '/' + c.volunteers_needed
     );
     markers.push(marker);
   });

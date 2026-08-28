@@ -19,9 +19,11 @@ function toApiCase(row: CaseRow) {
   return {
     id: row.id,
     status: row.status,
-    raw_text: row.raw_text,
+    // raw_text 與 location_text 刻意不回傳：這是公開端點，不需要任何 token。
+    // 兩者幾乎必然包含使用者輸入的完整地址，放行等於讓 claim token 的地址
+    // 保護只擋住經緯度、卻放走更精確的文字門牌。精確地址一律走
+    // GET /api/cases/:id/address（憑 claim token）。
     summary: row.summary,
-    location_text: row.location_text,
     public_lat: row.public_lat,
     public_lng: row.public_lng,
     volunteers_needed: row.volunteers_needed,
