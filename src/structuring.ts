@@ -64,7 +64,17 @@ const EXTRACTION_SCHEMA = {
   ],
 } as const;
 
-const SYSTEM_PROMPT = `你是災後需求通報的結構化助手。任務是把民眾用自然語言描述的災情需求，
+/**
+ * 開頭的 /no_think 是 Qwen3 系列混合推理模型約定的指令，要求模型跳過內部
+ * 思考步驟、直接產生答案。
+ *
+ * 不加的話，遇到需要推算的模糊說法（例如「淹水大約30公分以下，膝蓋以下」）
+ * 模型可能把整個 max_tokens 額度耗在思考過程上，真正該回傳的 JSON 是空的，
+ * extractFields 就會丟出「Workers AI did not return structured content」——
+ * 那不是我們的邏輯有錯，是這類模型的已知行為。
+ */
+const SYSTEM_PROMPT = `/no_think
+你是災後需求通報的結構化助手。任務是把民眾用自然語言描述的災情需求，
 轉換成結構化 JSON。
 
 務必使用繁體中文（台灣用語），絕對不要使用簡體中文回應，即使輸入內容極短或難以判讀也一樣。
@@ -103,7 +113,10 @@ export async function extractFields(
       json_schema: EXTRACTION_SCHEMA,
     },
     temperature: 0.2,
-    max_tokens: 800,
+    // /no_think 已經大幅降低思考佔用額度的機率，這裡再多留餘裕當第二層保險。
+    // 這個任務要輸出的 JSON 本來就不大，拉高上限不會有明顯的延遲或成本差異，
+    // 但額度不足的後果是整則通報抽取失敗 —— 兩邊的代價不對稱。
+    max_tokens: 2000,
   })) as { choices?: { message?: { content?: string } }[] };
 
   const content = response?.choices?.[0]?.message?.content;
