@@ -453,11 +453,19 @@ async function processLineEvents(env: Env, events: LineEvent[]) {
     } catch (err) {
       console.error("Error handling LINE event", err);
       if (event.replyToken) {
-        await replyMessage(
-          env,
-          event.replyToken,
-          "抱歉，系統處理您的通報時發生問題，請稍後再試一次，或直接聯繫現場救災協調站。"
-        );
+        // 錯誤處理路徑本身不能再丟出未被接住的例外 —— 這則道歉訊息很常送不出去
+        // （最典型的是 replyToken 已經被前面的即時緊急提醒用掉，LINE 回 400），
+        // 而那不該讓同一批 webhook 裡後面還沒處理的事件全部被中斷。
+        // 這裡只記錄，沒有更下一層的訊息可以送了。
+        try {
+          await replyMessage(
+            env,
+            event.replyToken,
+            "抱歉，系統處理您的通報時發生問題，請稍後再試一次，或直接聯繫現場救災協調站。"
+          );
+        } catch (notifyErr) {
+          console.error("Failed to send error notification to user", notifyErr);
+        }
       }
     }
   }
