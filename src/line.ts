@@ -355,13 +355,30 @@ async function processLineEvents(env: Env, events: LineEvent[]) {
       const text = event.message.text ?? "";
       const userId = event.source?.userId ?? null;
 
+      // 第一層緊急判斷：純字串比對，不等 AI、不等 geocode、不等 D1 —— 收到訊息
+      // 後幾乎立刻就能把 119/110 送到使用者眼前。後面 AI 判斷出的
+      // emergency_signal 是完全獨立的第二層，兩層只做加法、不互相抵銷：
+      // 都命中就會收到兩則提醒，重複提醒的代價遠低於漏掉一次。
+      //
+      // 這一段刻意排在限流「之前」：它只做一次字串比對加一次 Reply API 呼叫，
+      // 不碰 AI、不碰 geocode、不碰 D1，本來就不是限流要保護的資源；而一個
+      // 正在通報受困、溺水的人，最不該因為「發太多則」而被擋掉這則 119/110。
+      let replyTokenUsed = false;
+      if (event.replyToken && containsEmergencyKeyword(text)) {
+        await replyMessage(env, event.replyToken, EMERGENCY_REDIRECT_TEXT);
+        replyTokenUsed = true;
+      }
+
       // 簽章驗證只能擋掉偽造請求，擋不掉合法使用者短時間狂發訊息塞爆案件清單。
       // 注意：限流 key 用 "unknown" 作為 fallback，但寫進 DB 的 reporter_line_user_id
       // 仍然維持 null —— 「不知道是誰」不該被記成一個叫 unknown 的使用者。
       const rateLimitKey = userId ?? "unknown";
       const { success } = await env.LINE_RATE_LIMITER.limit({ key: rateLimitKey });
       if (!success) {
-        if (event.replyToken) {
+        // replyToken 只能用一次。剛剛若已經用在緊急提醒上，就不再送限流通知 ——
+        // 「請打119」遠比「你通報得有點頻繁」重要，不值得為了後者去撞一個
+        // 必然失敗的 Reply API 呼叫。
+        if (event.replyToken && !replyTokenUsed) {
           await replyMessage(
             env,
             event.replyToken,
@@ -381,16 +398,6 @@ async function processLineEvents(env: Env, events: LineEvent[]) {
           await replyMessage(env, event.replyToken, EXAMPLE_REPLY_TEXT);
         }
         continue;
-      }
-
-      // 第一層緊急判斷：純字串比對，不等 AI、不等 geocode、不等 D1 —— 收到訊息
-      // 後幾乎立刻就能把 119/110 送到使用者眼前。後面 AI 判斷出的
-      // emergency_signal 是完全獨立的第二層，兩層只做加法、不互相抵銷：
-      // 都命中就會收到兩則提醒，重複提醒的代價遠低於漏掉一次。
-      let replyTokenUsed = false;
-      if (event.replyToken && containsEmergencyKeyword(text)) {
-        await replyMessage(env, event.replyToken, EMERGENCY_REDIRECT_TEXT);
-        replyTokenUsed = true;
       }
 
       const fields = await extractFields(env, text);
