@@ -87,8 +87,21 @@ ADMIN_KEY 未設定、沒帶憑證、或密碼不符 → 一律 401，不透露�
 
 ## 精確地址存取控制
 
-`/api/cases` 這個公開清單**只會回傳模糊化後的 `public_lat` / `public_lng`**，
-精確座標和地址文字不會出現在任何公開回應裡。要看到精確位置，必須先認領：
+`/api/cases` 這個公開清單（不論 `sort=care_score` 或 `sort=latest`）**只回傳
+`summary`、`public_lat` / `public_lng` 這類不含使用者原始輸入、也不到街道地址
+等級的欄位**。`raw_text` 與 `location_text` 完全不會出現在這個端點的回應裡 ——
+不是空字串，是連鍵名都沒有。
+
+看得到這兩個欄位的只有兩條路徑：帶正確 claim token 呼叫
+`GET /api/cases/:id/address`（只回 `location_text`），以及通過 Basic Auth 的
+admin 後台（看得到 `raw_text`，因為人工比對重複案件需要讀原話；後台不顯示
+`location_text`）。
+
+`summary` 是 AI 產生的，而抽取用的 SYSTEM_PROMPT 明確要求它**只寫到縣市／
+鄉鎮區等級**（例如「台南仁德」），不得包含門牌等可定位到特定住戶的資訊 ——
+這是縱深防禦：就算欄位本身是公開的，內容粒度也先被限制過。
+
+要看到精確位置，必須先認領：
 
 ```
 POST /api/cases/:id/claim
@@ -345,6 +358,11 @@ git push -u origin main
 - **`volunteer_claims` 沒有索引**：目前沒有針對 `case_id` 或 `claim_token_hash`
   建立索引。Demo 規模（數十筆）完全無感，但 `verifyClaimToken` 每次驗證都要
   JOIN `cases` 並比對雜湊值，資料量成長後會退化成全表掃描，屆時應補上索引。
+- **公開 API 曾經外洩地址文字（已修）**：早期版本的 `/api/cases` 直接回傳
+  `raw_text` 與 `location_text`，等於讓 claim token 的地址保護形同虛設 ——
+  token 只保護了經緯度，文字門牌任何人都拿得到，而前端從不顯示這兩個欄位，
+  讓它看起來像是有保護的。這個問題是後續做安全稽核時才發現並修掉的，不是
+  一開始就設計成現在這樣。
 - **LINE 推播失敗只會留在 log 裡，沒有重試、也沒有介面提示**：通知送不出去時
   只會寫進 Workers Logs，系統不會重試，通報者與志工協調者在任何介面上都看不到
   「這則通知沒送達」。如果某位通報者持續收不到通知（最典型的是他封鎖了官方帳號），
