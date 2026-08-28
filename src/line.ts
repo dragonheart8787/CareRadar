@@ -126,7 +126,7 @@ async function sendToLine(
   endpoint: "reply" | "push",
   body: Record<string, unknown>
 ) {
-  await fetch(`https://api.line.me/v2/bot/message/${endpoint}`, {
+  const res = await fetch(`https://api.line.me/v2/bot/message/${endpoint}`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -134,6 +134,14 @@ async function sendToLine(
     },
     body: JSON.stringify(body),
   });
+
+  // 不檢查狀態碼的話，使用者封鎖官方帳號、userId 失效、推播額度用盡這類
+  // 4xx/5xx 都會被當成送出成功 —— 呼叫端的 try/catch 永遠不會觸發，
+  // 訊息就這樣靜默消失、也不會留下任何可稽核的痕跡。
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(`LINE API ${res.status}: ${body}`);
+  }
 }
 
 /**
