@@ -156,6 +156,26 @@ function scoreTierColor(score){
   return '#4fb0a3';
 }
 
+/**
+ * 瀏覽器端的 HTML 逸出。這份 script 是內嵌在頁面裡送到瀏覽器執行的，
+ * 沒辦法 import 伺服器端 admin.ts 那份 escapeHtml，所以另外寫一份。
+ *
+ * 用原生 DOM 做逸出（textContent 進、innerHTML 出）而不是手寫正則替換 ——
+ * 由瀏覽器自己決定哪些字元需要跳脫，不會漏掉邊界情況。
+ * 注意：這樣不會逸出引號，所以只能用在「文字內容」位置，不能拿去填
+ * HTML 屬性值。目前所有呼叫點都是文字內容。
+ */
+function escapeHtml(str){
+  const div = document.createElement('div');
+  div.textContent = str ?? '';
+  return div.innerHTML;
+}
+
+/**
+ * 注意結尾的 "|| t"：對照表查不到時會把原值原樣回傳。need_types 來自模型
+ * 輸出，而 extractFields 只檢查它是不是陣列、沒有比對 enum，所以這裡的
+ * 回傳值不保證永遠是寫死的中文字串 —— 呼叫端必須當成不可控內容逸出。
+ */
 function needTypeLabel(t){
   return ({
     debris_removal: '清淤', furniture_moving: '搬家具', drinking_water: '飲用水',
@@ -190,12 +210,12 @@ function renderList(cases){
       <div class="card-top">
         <div>
           <span class="rank">#\${i + 1}</span>
-          <div class="summary">\${c.summary || '（尚無摘要）'}</div>
+          <div class="summary">\${escapeHtml(c.summary || '（尚無摘要）')}</div>
           <div class="tags">
             \${isCompleted ? '<span class="tag ok">已完成</span>' : ''}
             \${isFull ? '<span class="tag ok">已額滿</span>' : ''}
             \${c.needs_human_verification ? '<span class="tag warn">資訊待複核</span>' : ''}
-            \${needTypes ? '<span class="tag">' + needTypes + '</span>' : ''}
+            \${needTypes ? '<span class="tag">' + escapeHtml(needTypes) + '</span>' : ''}
           </div>
         </div>
         <div style="text-align:right">
@@ -287,7 +307,8 @@ function renderMarkers(cases){
     }).addTo(map);
     marker.bindPopup(
       '<b>Care Score: ' + c.score_breakdown.total.toFixed(1) + '</b><br>' +
-      (c.summary || '（尚無摘要）') + '<br>志工 ' + c.volunteers_assigned + '/' + c.volunteers_needed
+      escapeHtml(c.summary || '（尚無摘要）') +
+      '<br>志工 ' + c.volunteers_assigned + '/' + c.volunteers_needed
     );
     markers.push(marker);
   });
