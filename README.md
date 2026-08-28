@@ -381,6 +381,15 @@ git push -u origin main
   只寫到區級的粗略地址（例如「台南仁德」）每次都能穩定解析到同一個代表座標。
   這是開發過程中用真實資料測出來的現象，也再次印證「未來方向」裡提到的：應該
   優先支援 LINE 原生的分享位置（GPS），而不是完全依賴文字地址交給 Nominatim。
+- **`claimCase` 與 `cancelClaim` 的多條寫入沒有包成單一交易**：兩者內部各自是
+  兩條獨立的 D1 語句 —— `claimCase` 先更新 `volunteers_assigned` / `status`、
+  再寫入 `volunteer_claims` 紀錄；`cancelClaim` 順序相反，先刪除紀錄、再回補
+  計數。這兩句沒有包在同一個交易（transaction）裡。如果 Worker 剛好在兩句
+  之間被中止（CPU 逾時、部署版本切換），`volunteers_assigned` 的計數就可能
+  與 `volunteer_claims` 的實際筆數對不上，而且系統沒有任何偵測或自我修復
+  機制。發生窗口極短（`claimCase` 的兩句之間只隔一次 UUID 產生與 SHA-256
+  運算），在目前的展示規模下風險可忽略；正式擴大規模使用前，應該用 D1 的
+  `batch()` 把這兩句包成單一原子操作。
 
 ## 未來方向（不是限制，是刻意的路線圖）
 
