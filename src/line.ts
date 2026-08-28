@@ -74,7 +74,15 @@ async function replyMessage(
   text: string,
   quickReplyItems?: QuickReplyItem[]
 ) {
-  if (!env.LINE_CHANNEL_ACCESS_TOKEN) return;
+  if (!env.LINE_CHANNEL_ACCESS_TOKEN) {
+    // 沒有 log 的話，這把 secret 漏設會變成：簽章驗證過、AI 跑完、案件寫進
+    // D1，但所有回覆與推播（含緊急提醒）靜默消失，維運端只會收到「使用者說
+    // 沒收到訊息」而查不到原因。兩處用同一句訊息，方便用同一個關鍵字搜 log。
+    console.error(
+      "LINE_CHANNEL_ACCESS_TOKEN not configured — message not sent"
+    );
+    return;
+  }
   await sendToLine(env, "reply", {
     replyToken,
     messages: [buildTextMessage(text, quickReplyItems)],
@@ -94,7 +102,15 @@ export async function pushMessage(
   text: string,
   quickReplyItems?: QuickReplyItem[]
 ) {
-  if (!env.LINE_CHANNEL_ACCESS_TOKEN) return;
+  if (!env.LINE_CHANNEL_ACCESS_TOKEN) {
+    // 沒有 log 的話，這把 secret 漏設會變成：簽章驗證過、AI 跑完、案件寫進
+    // D1，但所有回覆與推播（含緊急提醒）靜默消失，維運端只會收到「使用者說
+    // 沒收到訊息」而查不到原因。兩處用同一句訊息，方便用同一個關鍵字搜 log。
+    console.error(
+      "LINE_CHANNEL_ACCESS_TOKEN not configured — message not sent"
+    );
+    return;
+  }
   await sendToLine(env, "push", {
     to: userId,
     messages: [buildTextMessage(text, quickReplyItems)],
