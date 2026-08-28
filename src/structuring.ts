@@ -6,6 +6,20 @@ import type { Env, ExtractedFields } from "./types";
 // https://developers.cloudflare.com/workers-ai/models/qwen3-30b-a3b-fp8/
 const MODEL = "@cf/qwen/qwen3-30b-a3b-fp8";
 
+/**
+ * need_types 允許的值。EXTRACTION_SCHEMA 的 enum 與寫入前的驗證共用這一份 ——
+ * 分成兩份手key的清單遲早會漂移，而漂移的後果是「schema 說可以、驗證說不行」
+ * 這種只有在正式環境才會炸出來的不一致。
+ */
+const VALID_NEED_TYPES = [
+  "debris_removal",
+  "furniture_moving",
+  "drinking_water",
+  "cleaning_supplies",
+  "water_electricity_repair",
+  "other",
+] as const;
+
 const EXTRACTION_SCHEMA = {
   type: "object",
   properties: {
@@ -22,14 +36,7 @@ const EXTRACTION_SCHEMA = {
       type: "array",
       items: {
         type: "string",
-        enum: [
-          "debris_removal",
-          "furniture_moving",
-          "drinking_water",
-          "cleaning_supplies",
-          "water_electricity_repair",
-          "other",
-        ],
+        enum: VALID_NEED_TYPES,
       },
     },
     volunteers_needed: { type: ["integer", "null"], description: "需要幾位志工協助" },
@@ -122,7 +129,7 @@ export async function extractFields(
       typeof parsed.flood_depth_cm === "number" ? parsed.flood_depth_cm : null,
     no_water: parsed.no_water === true,
     no_electricity: parsed.no_electricity === true,
-    need_types: Array.isArray(parsed.need_types) ? parsed.need_types : [],
+    need_types: normalizeNeedTypes(parsed.need_types),
     volunteers_needed:
       typeof parsed.volunteers_needed === "number" ? parsed.volunteers_needed : null,
     // 抽取失敗時**不能**拿 rawText 當 fallback —— summary 會出現在公開的
@@ -136,6 +143,29 @@ export async function extractFields(
     // 警告一旦變成雜訊，真正緊急的那則就沒人看了。
     emergency_signal: parsed.emergency_signal === true,
   };
+}
+
+/**
+ * 把模型回傳的 need_types 收斂到白名單內。
+ *
+ * schema 裡的 enum 只是「請照著填」的指示，不是保證：模型仍可能回傳表外的
+ * 字串，而那會原樣寫進 D1、再流到前端與 Care Score。這裡逐項比對白名單，
+ * **只丟掉不合法的那幾個，合法的保留** —— 一個代號填錯不該讓整筆需求消失。
+ *
+ * 全部都不合法時退回 ["other"]（沿用 enum 裡本來就有的值）。但空陣列維持
+ * 空陣列、不做任何 fallback：「模型有講需求、只是代號講錯」跟「文字裡本來
+ * 就沒提到任何需求類型」是兩回事，後者不該被塞進一個憑空的需求。
+ */
+function normalizeNeedTypes(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+
+  const allowed: readonly string[] = VALID_NEED_TYPES;
+  const filtered = value.filter(
+    (v): v is string => typeof v === "string" && allowed.includes(v)
+  );
+
+  if (filtered.length === 0 && value.length > 0) return ["other"];
+  return filtered;
 }
 
 /**
