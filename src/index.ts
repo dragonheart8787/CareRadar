@@ -2,6 +2,7 @@ import type { CaseRow, Env } from "./types";
 import { computeCareScore } from "./care_score";
 import {
   cancelClaim,
+  CaseNotMergeableError,
   claimCase,
   getCase,
   listCases,
@@ -339,7 +340,20 @@ export default {
         });
       }
       const caseId = parseInt(resolveMatch[1], 10);
-      const updated = await resolveDuplicate(env, caseId, body.action);
+      let updated: CaseRow | null;
+      try {
+        updated = await resolveDuplicate(env, caseId, body.action);
+      } catch (err) {
+        // 案件存在、但已完成或已關閉：這不是 404（案件在），也不是 500
+        // （沒有壞掉），是這個操作在目前狀態下不被允許 —— 409 才對得上。
+        if (err instanceof CaseNotMergeableError) {
+          return new Response(
+            JSON.stringify({ error: "案件已完成或已關閉，無法合併" }),
+            { status: 409, headers: JSON_HEADERS }
+          );
+        }
+        throw err;
+      }
       if (!updated) {
         return new Response(JSON.stringify({ error: "case not found" }), {
           status: 404,

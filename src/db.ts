@@ -76,10 +76,31 @@ export async function listPossibleDuplicates(
 }
 
 /**
+ * resolveDuplicate 在「案件存在、但目前狀態不允許合併」時拋出這個錯誤。
+ *
+ * 刻意不沿用回傳 null —— null 在呼叫端的語意已經是「案件不存在」（回 404）。
+ * 一筆已完成的案件被誤判為重複，跟一個打錯的 case id 是完全不同的情況，
+ * 混在同一個回應裡會讓 admin 以為案件消失了，反而更難查。
+ */
+export class CaseNotMergeableError extends Error {
+  constructor() {
+    super("case cannot be merged: already completed or closed");
+    this.name = "CaseNotMergeableError";
+  }
+}
+
+/**
  * 人工裁決一筆疑似重複案件。
  *   merge         → 關閉這筆重複案件（原始案件不動）
  *   not_duplicate → 清掉標記，兩筆都留著
  * 兩種都寫進 case_status_history，讓「為什麼這筆消失了」有跡可循。
+ *
+ * merge 的狀態守衛收在 UPDATE 語句裡（而不是先讀 existing 再判斷），跟
+ * claimCase / markCaseCompleted 同一套作法：admin 按下合併的同時志工剛好
+ * 回報完成，也不會有先讀後寫的競態把 completed 蓋成 closed。
+ *
+ * not_duplicate 刻意不加狀態限制 —— 宣告「這兩筆不是同一件事」是對事實的
+ * 更正，跟案件現在是 open 還是 completed 無關，任何狀態都該能標記。
  */
 export async function resolveDuplicate(
   env: Env,
@@ -90,11 +111,16 @@ export async function resolveDuplicate(
   if (!existing) return null;
 
   if (action === "merge") {
-    await env.DB.prepare(
-      `UPDATE cases SET status = 'closed', updated_at = datetime('now') WHERE id = ?`
+    const updateResult = await env.DB.prepare(
+      `UPDATE cases SET status = 'closed', updated_at = datetime('now')
+       WHERE id = ? AND status NOT IN ('completed', 'closed')`
     )
       .bind(caseId)
       .run();
+
+    // 案件存在（上面 getCase 已經確認）卻沒更新到，只可能是狀態擋下來的。
+    if (!updateResult.meta.changes) throw new CaseNotMergeableError();
+
     await logHistory(
       env,
       caseId,
