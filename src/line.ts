@@ -474,7 +474,14 @@ async function processLineEvents(env: Env, events: LineEvent[]) {
         }
       }
     } catch (err) {
-      console.error("Error handling LINE event", err);
+      // 只印 err 這個物件的話，Workers Logs 上得到的常常只是 "[object Object]"
+      // 或一行沒有內容的 Error —— 查得到「在哪裡失敗」，查不到「為什麼失敗」。
+      // 這裡把訊息與 stack 都攤成字串，非 Error 的丟出物（字串、數字）也一併涵蓋。
+      console.error(
+        "Error handling LINE event:",
+        err instanceof Error ? err.message : String(err),
+        err instanceof Error ? err.stack : ""
+      );
       if (event.replyToken) {
         // 錯誤處理路徑本身不能再丟出未被接住的例外 —— 這則道歉訊息很常送不出去
         // （最典型的是 replyToken 已經被前面的即時緊急提醒用掉，LINE 回 400），
