@@ -553,6 +553,16 @@ function parseNeedTypes(json: string | null): string[] {
  * 讓「兩位志工同時搶最後一個名額」在 SQLite/D1 的單一 UPDATE 語句層級
  * 被正確序列化 —— 不需要額外的鎖，也不會有名額被超額分配的競態條件。
  * 回傳 null 代表「你來晚了，名額剛好被別人搶走」。
+ *
+ * 「額滿就轉成 full」也**必須**在同一句 UPDATE 裡完成。曾經的寫法是先
+ * getCase 讀出來、在應用層比大小、再下一句無條件的
+ * `UPDATE cases SET status='full' WHERE id=?`，那中間的空隙會出兩種錯：
+ *   1. 若這段期間有人取消認領，那句無條件 UPDATE 會把「1/2 卻標成 full」
+ *      寫死，案件從推薦清單消失且再也沒人能認領（claimCase 要求 open）。
+ *   2. 若這段期間案件被回報完成，completed 會被覆寫回 full —— 狀態機倒退，
+ *      而且該案件已失效的 claim token 會跟著復活。
+ * 合併成單句之後，狀態轉換只可能發生在 WHERE 已經確認 status='open' 的
+ * 那一刻，上述兩種情況都不再存在。
  */
 export async function claimCase(
   env: Env,
@@ -562,6 +572,10 @@ export async function claimCase(
   const updateResult = await env.DB.prepare(
     `UPDATE cases
      SET volunteers_assigned = volunteers_assigned + 1,
+         status = CASE
+           WHEN volunteers_assigned + 1 >= volunteers_needed THEN 'full'
+           ELSE status
+         END,
          updated_at = datetime('now')
      WHERE id = ? AND status = 'open' AND volunteers_assigned < volunteers_needed`
   )
@@ -599,12 +613,11 @@ export async function claimCase(
     `${updated.volunteers_assigned}/${updated.volunteers_needed}`
   );
 
-  if (updated.volunteers_assigned >= updated.volunteers_needed) {
-    await env.DB.prepare(`UPDATE cases SET status = 'full' WHERE id = ?`)
-      .bind(caseId)
-      .run();
+  // 狀態已經在上面那句 UPDATE 裡轉好了，這裡只補一筆歷程紀錄。
+  // 讀到的若不是 full，代表這中間有人取消了認領 —— 那就不該記 full，
+  // 記錄反映的是實際狀態，不是這次認領「本來會造成」的狀態。
+  if (updated.status === "full") {
     await logHistory(env, caseId, "full");
-    updated.status = "full";
   }
 
   return { case: updated, claimToken };
