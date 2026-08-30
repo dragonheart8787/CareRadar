@@ -129,22 +129,31 @@ export async function extractFields(
   // 防禦性正規化：就算 schema 沒被完美遵守，也不要讓整個流程炸掉。
   // 寧可保守地把可疑欄位歸零，也不要讓一個解析錯誤變成一個隱形的 500。
   return {
-    location_text: parsed.location_text ?? null,
-    age: typeof parsed.age === "number" ? parsed.age : null,
+    // 空白字串當成沒填。geocode() 本來就用 `if (!locationText)` 把 "" 視為
+    // 沒有地址，但 confidence/追問那一側只看 !== null —— 於是一個空字串
+    // 會讓案件永遠拿不到座標、又永遠不會被追問地址。這裡在源頭統一標準。
+    // 只用 trim 的結果判斷空不空，實際存下去的仍是模型原本給的字串。
+    location_text:
+      typeof parsed.location_text === "string" && parsed.location_text.trim()
+        ? parsed.location_text
+        : null,
+    // 0 歲（嬰兒）是合法值；130 是留了餘裕的人類壽命上限。
+    age: normalizeBoundedInt(parsed.age, 0, 130),
     lives_alone: typeof parsed.lives_alone === "boolean" ? parsed.lives_alone : null,
     mobility_impaired:
       typeof parsed.mobility_impaired === "boolean" ? parsed.mobility_impaired : null,
     has_young_children:
       typeof parsed.has_young_children === "boolean" ? parsed.has_young_children : null,
-    household_size:
-      typeof parsed.household_size === "number" ? parsed.household_size : null,
-    flood_depth_cm:
-      typeof parsed.flood_depth_cm === "number" ? parsed.flood_depth_cm : null,
+    // 通報者本人至少算 1 人；50 是合理的家戶人數上限。
+    household_size: normalizeBoundedInt(parsed.household_size, 1, 50),
+    // 只擋負值，不設上限 —— 上限已經由 Care Score 的 150cm cap 處理過，
+    // 在這裡重複設限只會多一個要同步維護的數字。
+    flood_depth_cm: normalizeBoundedInt(parsed.flood_depth_cm, 0, Infinity),
     no_water: parsed.no_water === true,
     no_electricity: parsed.no_electricity === true,
     need_types: normalizeNeedTypes(parsed.need_types),
-    volunteers_needed:
-      typeof parsed.volunteers_needed === "number" ? parsed.volunteers_needed : null,
+    // min 設 1：0 與負數會變成 null，交給 insertCase 既有的 `?? 1` 補上預設值。
+    volunteers_needed: normalizeBoundedInt(parsed.volunteers_needed, 1, Infinity),
     // 抽取失敗時**不能**拿 rawText 當 fallback —— summary 會出現在公開的
     // /api/cases 回應裡，而使用者原話開頭通常就是完整地址。寧可顯示一句
     // 沒有資訊量的固定字串，也不要把原始輸入洩漏到公開端點。
@@ -156,6 +165,36 @@ export async function extractFields(
     // 警告一旦變成雜訊，真正緊急的那則就沒人看了。
     emergency_signal: parsed.emergency_signal === true,
   };
+}
+
+/**
+ * 把模型回傳的數值收斂成「合理範圍內的整數」，否則一律回傳 null。
+ *
+ * 只檢查 typeof === "number" 是不夠的：模型回得出 -5 歲、-100 公分的淹水
+ * 深度、0 位志工。這些值不會讓程式炸掉，會安靜地流進 D1 再流進 Care Score
+ * —— 負的淹水深度會讓 Severity 變負數，把那一戶推到清單最底；0 位志工
+ * 會讓案件永遠通不過 claimCase 的名額檢查，變成沒人認領得了的殭屍案件。
+ *
+ * 超出範圍時回傳 null 而不是夾到邊界值，是刻意的：null 的語意是「不知道」，
+ * 會如實反映在 confidence 與追問訊息上；夾到邊界則是系統擅自編了一個
+ * 看起來合理的數字，那正是抽取 prompt 一直要求模型不要做的事。
+ *
+ * Number.isFinite 這道關卡不能省 —— JSON 沒有 Infinity 字面值，但 1e999
+ * 是合法 JSON，JSON.parse 會把它變成 Infinity，而 Math.round(Infinity)
+ * 仍是 Infinity、也仍然「落在」上限為 Infinity 的區間內。
+ */
+export function normalizeBoundedInt(
+  value: unknown,
+  min: number,
+  max: number
+): number | null {
+  if (typeof value !== "number" || !Number.isFinite(value)) return null;
+  const rounded = Math.round(value);
+  if (rounded < min || rounded > max) return null;
+  // Math.round(-0.4) 是 -0。它通得過範圍檢查、算術上也等於 0，但會以 -0
+  // 的身分一路傳下去；加 0 把它收斂成正零，免得之後有人用 Object.is 或
+  // 快照比對時對著一個看不出差別的值卡住。
+  return rounded + 0;
 }
 
 /**
