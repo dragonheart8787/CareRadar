@@ -251,11 +251,16 @@ export async function findPendingSupplementCase(
   windowMinutes: number = 15
 ): Promise<CaseRow | null> {
   if (!lineUserId) return null; // 拿不到 userId 就無從對應，不猜
+  // 刻意不再限定 needs_human_verification = 1。以前有這個條件，案件的
+  // confidence 一跨過 0.5（實測填 2~3 個關鍵欄位就會發生）就不再是可補充
+  // 的目標，但使用者聊天視窗裡那則追問訊息的 Quick Reply 按鈕還在、還能按
+  // —— 於是接下來每按一顆就開一筆新案件，同一戶被切成好幾筆沒有地址、
+  // 畫不出座標、連重複偵測都比對不到的碎片。
+  // 「還能不能補充」該由時間窗與案件是否仍開放決定，跟資訊填得夠不夠無關。
   return env.DB.prepare(
     `SELECT * FROM cases
      WHERE reporter_line_user_id = ?
        AND status = 'open'
-       AND needs_human_verification = 1
        AND updated_at > datetime('now', '-' || ? || ' minutes')
      ORDER BY updated_at DESC
      LIMIT 1`
