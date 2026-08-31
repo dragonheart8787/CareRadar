@@ -29,6 +29,7 @@ export interface ExtractedFields {
   // 是否透露立即性生命危險。純粹用來決定回覆要不要附上 119/110 提醒 ——
   // 不進 Care Score、不進 confidence_score、也不寫進 D1。
   emergency_signal: boolean;
+  emotional_distress_signal: boolean;
 }
 
 export interface CaseRow {

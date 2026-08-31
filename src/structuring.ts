@@ -46,6 +46,11 @@ const EXTRACTION_SCHEMA = {
       description:
         "文字中是否透露立即性生命危險，例如受困無法脫身、溺水、昏迷、嚴重外傷持續出血、無法呼吸、意識不清等當下需要119/110立即介入的狀況——單純淹水嚴重、等待救援時間長、家中損失嚴重，不算在這個範圍內，那些是既有的 Severity/Urgency 在處理的事",
     },
+    emotional_distress_signal: {
+      type: "boolean",
+      description:
+        "文字中是否透露明顯的情緒低落、無助、疲憊、崩潰感，例如「好累」「撐不下去」「不知道該怎麼辦」「好無助」——單純描述災情嚴重不算，這裡指的是使用者自身情緒狀態的表露",
+    },
   },
   required: [
     "location_text",
@@ -61,6 +66,7 @@ const EXTRACTION_SCHEMA = {
     "volunteers_needed",
     "summary",
     "emergency_signal",
+    "emotional_distress_signal",
   ],
 } as const;
 
@@ -97,7 +103,15 @@ const SYSTEM_PROMPT = `/no_think
   溺水、昏迷、意識不清、嚴重外傷持續出血、無法呼吸，這些是需要119/110立即介入的狀況。
   請嚴格區分「嚴重」與「立即危及生命」：淹水很深、等待很久、家具全毀、停水停電、
   年紀大又獨居，這些再嚴重都不算，它們由系統既有的 Severity/Urgency 處理。
-  判斷不確定時一律填 false。`;
+  判斷不確定時一律填 false。
+- emotional_distress_signal 判斷的是**使用者自身的情緒狀態**：文字裡有沒有透露明顯的
+  情緒低落、無助、疲憊、崩潰感，例如「好累」「撐不下去了」「不知道該怎麼辦」「好無助」。
+  只是把災情講得很嚴重（淹得很高、東西全毀、等很久了）不算 —— 那是在描述外在狀況，
+  不是在表達自己的心情。判斷不確定時一律填 false。
+- 這兩個訊號是**不同的東西，各自獨立判斷**，可以同時為 true，也可以只有一個為 true：
+  emergency_signal 問的是「現在有沒有立即的生命危險」（需要 119／110 出動），
+  emotional_distress_signal 問的是「這個人的心情狀態」。一個人可以情緒很崩潰但人身
+  安全無虞，也可以受困待救卻語氣平靜地陳述事實。`;
 
 export async function extractFields(
   env: Env,
@@ -164,6 +178,9 @@ export async function extractFields(
     // 不確定就當作沒有：預設 true 會讓每一則通報都掛上緊急提醒，
     // 警告一旦變成雜訊，真正緊急的那則就沒人看了。
     emergency_signal: parsed.emergency_signal === true,
+    // 同樣「不確定就當作沒有」：安撫語每則都出現的話就變成罐頭客套話，
+    // 真的需要被接住的那一則反而顯不出任何差別。
+    emotional_distress_signal: parsed.emotional_distress_signal === true,
   };
 }
 

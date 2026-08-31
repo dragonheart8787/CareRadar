@@ -283,6 +283,50 @@ function containsEmergencyKeyword(text: string): boolean {
   return EMERGENCY_KEYWORDS.some((keyword) => text.includes(keyword));
 }
 
+/**
+ * 第一層自傷訊號用的字詞。
+ *
+ * 跟 EMERGENCY_KEYWORDS 同一套保守取捨，但收得更緊：這裡只收「幾乎不可能是
+ * 一般抱怨」的說法。災後說「累死了」「這日子沒法過了」的人非常多，那是疲憊
+ * 與氣話，不是求救；把那些也收進來的話，1925 這則訊息會變成每個人都收到的
+ * 罐頭回覆，真正需要它的那一則就跟著一起被忽略。寧可漏判，交給後面 AI 的
+ * emotional_distress_signal 再接一次。
+ */
+const SELF_HARM_KEYWORDS = [
+  "不想活了",
+  "活不下去了",
+  "想自殺",
+  "想結束生命",
+  "沒有活著的意義",
+  "解脫就好",
+];
+
+/** 比照 containsEmergencyKeyword：純 substring 比對，零外部呼叫、零等待。 */
+function containsSelfHarmKeyword(text: string): boolean {
+  return SELF_HARM_KEYWORDS.some((keyword) => text.includes(keyword));
+}
+
+/**
+ * 情緒安撫語，附加在既有回覆的最前面（緊急提醒之後）。
+ *
+ * 刻意只有一句、不追問心情、不提供任何諮商式的建議 —— 這是一個災後需求
+ * 媒合機器人，它能做的是「讓對方知道有人看見了」加上「把事情辦好」，
+ * 越界扮演心理支持角色反而失禮。
+ */
+const EMOTIONAL_SUPPORT_TEXT =
+  "辛苦了，這種狀況真的不容易，我們會盡快協助您度過難關。";
+
+/**
+ * 命中自傷關鍵字時，在既有流程之外「額外」送出的一則訊息。
+ *
+ * 帶上安心專線 1925（衛福部 24 小時免付費），因為這個系統本身沒有任何能力
+ * 處理這件事 —— 能做的就是把人接到真正做得到的地方去，而且要在 AI 抽取、
+ * 地理編碼、寫入 D1 之前就送出。後半句仍然承接災後需求，是為了不讓使用者
+ * 覺得講了這句話就被轉走、原本的求助沒人理。
+ */
+const SELF_HARM_SUPPORT_TEXT =
+  "我們注意到您可能正承受很大的壓力。如果您需要有人談談，安心專線 1925（24小時、免付費）有專業人員可以陪您說說話。同時我們也會盡快協助您的災後需求。";
+
 // 使用者還沒發過任何文字通報就先分享位置時的回覆。
 // 刻意不寫「之後會自動幫您附上」—— 這一版沒有暫存座標的機制，
 // 對災民承諾一件程式其實沒做的事，比不回覆更糟。
@@ -385,6 +429,28 @@ async function processLineEvents(env: Env, events: LineEvent[]) {
         replyTokenUsed = true;
       }
 
+      // 第一層自傷訊號，跟上面的緊急判斷完全獨立：兩者都可能命中，各送各的，
+      // 不互相取代。同樣排在限流之前 —— 一個打出「不想活了」的人，最不該
+      // 因為「這則是他今天第 11 則訊息」而收不到 1925。
+      //
+      // 這裡刻意不 continue：這則訊息仍然是一筆有效的災後需求通報，
+      // 後面的 AI 抽取、建案、追問全部照常跑完。安撫是加法，不是分支。
+      if (containsSelfHarmKeyword(text)) {
+        if (event.replyToken && !replyTokenUsed) {
+          await replyMessage(env, event.replyToken, SELF_HARM_SUPPORT_TEXT);
+          replyTokenUsed = true;
+        } else if (userId) {
+          // replyToken 已經被緊急提醒用掉了。LINE 規定一個 replyToken 只能回
+          // 一次，第二次呼叫必定被拒 —— 改用 Push，寧可耗一則推播額度也不能
+          // 讓這則訊息消失。
+          await pushMessage(env, userId, SELF_HARM_SUPPORT_TEXT);
+        } else {
+          console.error(
+            "Self-harm keyword matched but no way to reply (replyToken used and no userId)"
+          );
+        }
+      }
+
       // 簽章驗證只能擋掉偽造請求，擋不掉合法使用者短時間狂發訊息塞爆案件清單。
       // 注意：限流 key 用 "unknown" 作為 fallback，但寫進 DB 的 reporter_line_user_id
       // 仍然維持 null —— 「不知道是誰」不該被記成一個叫 unknown 的使用者。
@@ -450,9 +516,16 @@ async function processLineEvents(env: Env, events: LineEvent[]) {
         // 疑似立即生命危險 → 把導向 119/110 的提醒放在最前面。放最前面是刻意的：
         // 使用者在 LINE 只會看到訊息開頭那幾行，擺在結尾等於沒說。
         // 這只影響回覆文字，案件建立與評分完全不受影響。
-        const replyText = fields.emergency_signal
-          ? EMERGENCY_REDIRECT_TEXT + "\n\n" + baseText
-          : baseText;
+        // 兩個前綴各自獨立、可以同時出現（一個人可能既淹水受困、又情緒崩潰）。
+        // 順序固定：緊急提醒永遠在最上面 —— 使用者在 LINE 只會看到開頭幾行，
+        // 而救命訊息排在安撫語後面等於把它藏起來了。
+        let replyText = baseText;
+        if (fields.emotional_distress_signal) {
+          replyText = EMOTIONAL_SUPPORT_TEXT + "\n\n" + replyText;
+        }
+        if (fields.emergency_signal) {
+          replyText = EMERGENCY_REDIRECT_TEXT + "\n\n" + replyText;
+        }
 
         // 資訊不足才帶快速回覆按鈕；補齊了就只回確認訊息。
         const quickReplies =
