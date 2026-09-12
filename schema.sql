@@ -37,6 +37,7 @@ CREATE TABLE IF NOT EXISTS cases (
   summary                 TEXT,                              -- AI 產生的一行摘要
   confidence_score        REAL,                              -- 0~1，規則式計算，不是模型自報
   needs_human_verification INTEGER NOT NULL DEFAULT 0,
+  emergency_flagged       INTEGER DEFAULT 0,                 -- 0/1：這筆案件的任何一則訊息曾命中緊急關鍵字。純資訊標籤，不進 Care Score
   possible_duplicate_of   INTEGER,                            -- 指向疑似重複的案件 id（不自動合併）
 
   status                  TEXT NOT NULL DEFAULT 'open',      -- open | full | closed

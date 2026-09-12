@@ -79,6 +79,9 @@ export interface CaseRow {
   summary: string | null;
   confidence_score: number | null;
   needs_human_verification: number;
+  // 0/1：這筆案件曾經有訊息命中 containsEmergencyKeyword。只會從 0 變 1。
+  // 純粹給志工看的資訊標籤 —— 不進 Care Score、不影響 confidence、不影響排序。
+  emergency_flagged: number;
   possible_duplicate_of: number | null;
   status: "open" | "full" | "closed" | "completed";
   reported_at: string;

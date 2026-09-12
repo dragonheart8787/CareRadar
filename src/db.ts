@@ -203,6 +203,10 @@ export async function insertCase(
     exact: { lat: number; lng: number } | null;
     fuzzed: { lat: number; lng: number } | null;
     precision?: LocationPrecision | null;
+    // 這一則訊息有沒有命中緊急關鍵字。刻意由呼叫端傳進來而不是放在
+    // ExtractedFields 裡：它不是 AI 抽取的結果，是 line.ts 在 AI 之前就用
+    // 字串比對算出來的，混進 AI 欄位會讓「這個值是誰算的」變得不清楚。
+    emergencyFlagged?: boolean;
   }
 ): Promise<CaseRow> {
   const { fields } = params;
@@ -221,8 +225,9 @@ export async function insertCase(
       age, lives_alone, mobility_impaired, has_young_children, household_size,
       flood_depth_cm, no_water, no_electricity, need_types, access_obstacle,
       volunteers_needed, volunteers_assigned, summary,
-      confidence_score, needs_human_verification, possible_duplicate_of, status
-    ) VALUES (?,?,?,?, ?,?,?,?,?, ?,?,?,?,?, ?,?,?,?,?, ?,0,?, ?,?,?, 'open')
+      confidence_score, needs_human_verification, emergency_flagged,
+      possible_duplicate_of, status
+    ) VALUES (?,?,?,?, ?,?,?,?,?, ?,?,?,?,?, ?,?,?,?,?, ?,0,?, ?,?,?,?, 'open')
     RETURNING *`
   )
     .bind(
@@ -249,7 +254,8 @@ export async function insertCase(
       volunteersNeeded,
       fields.summary,
       0, // confidence_score 先塞 0，下面用真正的 row 算完再 UPDATE
-      0,
+      0, // needs_human_verification，同上
+      params.emergencyFlagged ? 1 : 0,
       duplicateOf
     )
     .first<CaseRow>();
@@ -366,7 +372,8 @@ export async function supplementCase(
   newRawText: string,
   newExact: { lat: number; lng: number } | null,
   newFuzzed: { lat: number; lng: number } | null,
-  newPrecision: LocationPrecision | null = null
+  newPrecision: LocationPrecision | null = null,
+  newEmergencyFlagged: boolean = false
 ): Promise<CaseRow> {
   const existing = await getCase(env, caseId);
   if (!existing) throw new Error(`Case ${caseId} not found`);
@@ -460,6 +467,11 @@ export async function supplementCase(
     volunteers_needed: existing.volunteers_needed,
     no_water: noWater,
     no_electricity: noElectricity,
+    // 只能從 0 變 1，永遠不會變回 0。一則訊息喊過「受困」，就算後面幾則
+    // 補充講的都是家具搬運，那個「曾經喊過」的事實不會消失 —— 讓它被沖掉
+    // 等於是用最新一則訊息的語氣覆蓋掉整串對話裡最該被看見的那一則。
+    emergency_flagged:
+      existing.emergency_flagged === 1 || newEmergencyFlagged ? 1 : 0,
     need_types: JSON.stringify(mergedNeedTypes),
     raw_text: mergedRawText,
     summary: mergedSummary,
@@ -491,7 +503,7 @@ export async function supplementCase(
        age = ?, lives_alone = ?, mobility_impaired = ?,
        has_young_children = ?, household_size = ?,
        flood_depth_cm = ?, no_water = ?, no_electricity = ?, need_types = ?,
-       access_obstacle = ?,
+       access_obstacle = ?, emergency_flagged = ?,
        volunteers_needed = ?, raw_text = ?, summary = ?,
        confidence_score = ?, needs_human_verification = ?,
        updated_at = datetime('now')
@@ -515,6 +527,7 @@ export async function supplementCase(
       merged.no_electricity,
       merged.need_types,
       merged.access_obstacle,
+      merged.emergency_flagged,
       merged.volunteers_needed,
       merged.raw_text,
       merged.summary,

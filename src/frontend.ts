@@ -64,6 +64,18 @@ export function renderHtml(): string {
   .tag{ font-size:11px; padding:2px 8px; border-radius:100px; border:1px solid var(--line); color:var(--ink-dim); }
   .tag.warn{ color:var(--red); border-color:var(--red); }
   .tag.ok{ color:var(--teal); border-color:var(--teal); }
+  /* 緊急關鍵字標記：整張卡片最強的視覺層級，橫跨整列擺在最上面。
+     用紅色系而不是琥珀色，是因為它跟通行阻礙、精確度那些「出發前要知道的事」
+     不是同一個重要性等級 —— 那些影響怎麼去，這個影響要不要先打 119。
+     措辭必須自己聲明不確定性：這只是關鍵字比對的結果，不是已確認的事實。 */
+  .emergency-flag{
+    display:flex; gap:6px; align-items:flex-start;
+    margin:0 0 10px; padding:7px 10px; border-radius:6px;
+    border:1px solid var(--red); background:rgba(217,99,74,0.12);
+    color:var(--red); font-size:11.5px; line-height:1.5; font-weight:600;
+  }
+  .emergency-flag .ef-note{ font-weight:400; opacity:0.85; }
+
   /* 通行阻礙：跟「待人工複核」面板同一組琥珀色，但刻意用另一種形狀 ——
      那邊是填滿背景的整塊面板，這裡只用一條左邊界，避免兩者在畫面上糊成一團。 */
   /* 認領成功後的一次性 LINE 綁定提示。用中性的面板色而不是琥珀色 ——
@@ -240,6 +252,7 @@ function renderList(cases){
     const card = document.createElement('div');
     card.className = 'card' + (isFull || isCompleted ? ' full' : '');
     card.innerHTML = \`
+      \${c.emergency_flagged ? '<div class="emergency-flag"><span>🚨</span><span>系統偵測到可能的緊急關鍵字<br><span class="ef-note">僅供參考，不代表已確認為緊急狀況</span></span></div>' : ''}
       <div class="card-top">
         <div>
           <span class="rank">#\${i + 1}</span>

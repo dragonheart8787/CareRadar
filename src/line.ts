@@ -632,7 +632,8 @@ async function processLineEvents(env: Env, events: LineEvent[]) {
             text,
             exact,
             fuzzed,
-            exact?.precision ?? null
+            exact?.precision ?? null,
+            emergencyKeywordHit
           )
         : await insertCase(env, {
             source: "line",
@@ -642,6 +643,7 @@ async function processLineEvents(env: Env, events: LineEvent[]) {
             exact,
             fuzzed,
             precision: exact?.precision ?? null,
+            emergencyFlagged: emergencyKeywordHit,
           });
 
       if (event.replyToken) {
