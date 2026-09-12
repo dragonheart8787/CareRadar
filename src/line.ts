@@ -683,12 +683,15 @@ async function processLineEvents(env: Env, events: LineEvent[]) {
         // 這裡不需要另外排除 GPS 分享：那條路徑走的是 processLocationEvent，
         // 早在上面就 continue 了，根本走不到這一段。
         //
-        // 命中緊急關鍵字時一律不加：那則回覆的重點是「請打 119／110」，後面
+        // 只要判定為緊急就一律不加：那則回覆的重點是「請打 119／110」，後面
         // 再追一句「麻煩補充路名巷弄」等於要一個正在通報受困的人先去想門牌。
-        // 這裡看的是關鍵字那一層（emergencyKeywordHit），不是 AI 判斷的
-        // emergency_signal —— 後者要不要一起排除還沒決定，先只處理這一層。
+        //
+        // 兩層訊號一視同仁 —— 關鍵字比對（emergencyKeywordHit）與 AI 語意判斷
+        // （emergency_signal）任一為真都算。對正在求救的人來說，「系統是怎麼
+        // 判斷出我很緊急的」毫無意義，會不會被追問地址細節才是他感受得到的事。
         if (
           !emergencyKeywordHit &&
+          !fields.emergency_signal &&
           fields.location_text !== null &&
           fields.location_detail_level === "district"
         ) {
