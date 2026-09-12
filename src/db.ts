@@ -111,6 +111,39 @@ export class CaseNotMergeableError extends Error {
 }
 
 /**
+ * Debug 用：把這位 LINE 使用者名下所有還開著的案件一次關閉。
+ *
+ * 測試時同一個帳號會反覆通報，而 findPendingSupplementCase 的 15 分鐘窗口會
+ * 把後面每一則都併進前一筆案件 —— 要測「新建案件」的行為就得等 15 分鐘，
+ * 或是手動進 D1 改狀態。這個函式就是那把剪刀。
+ *
+ * 用 status='closed' 而不是真的刪除：closed 是既有的終態，重複偵測、
+ * care_score 清單、claim token 驗證本來就都會排除它，不需要為了這個功能
+ * 在任何查詢裡多加一個條件。歷史軌跡也留著。
+ *
+ * 只影響「這個 userId 自己」的案件 —— WHERE 綁死 reporter_line_user_id，
+ * 沒有任何路徑能讓一個人關掉別人的案件。
+ */
+export async function closeOpenCasesForUser(
+  env: Env,
+  lineUserId: string | null | undefined
+): Promise<number> {
+  // 拿不到 userId 就不執行查詢：空字串會match到 reporter_line_user_id 同樣
+  // 是空字串的列，null 更會把條件變成永遠不成立的比較，兩種都不是「這個人
+  // 名下的案件」，不如直接不做事。
+  if (!lineUserId) return 0;
+
+  const result = await env.DB.prepare(
+    `UPDATE cases SET status = 'closed', updated_at = datetime('now')
+     WHERE reporter_line_user_id = ? AND status = 'open'`
+  )
+    .bind(lineUserId)
+    .run();
+
+  return result.meta.changes ?? 0;
+}
+
+/**
  * 人工裁決一筆疑似重複案件。
  *   merge         → 關閉這筆重複案件（原始案件不動）
  *   not_duplicate → 清掉標記，兩筆都留著

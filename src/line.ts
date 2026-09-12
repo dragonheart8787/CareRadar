@@ -2,6 +2,7 @@ import type { Env } from "./types";
 import { extractFields, geocode, fuzzLocation } from "./structuring";
 import { describeMissingFields, getMissingFieldKeys } from "./care_score";
 import {
+  closeOpenCasesForUser,
   findPendingSupplementCase,
   insertCase,
   supplementCase,
@@ -250,6 +251,18 @@ const ADDRESS_DETAIL_HINT =
  * 人工複核的時間。範例是「教學」，不是「通報」，不該進入案件流程。
  */
 const EXAMPLE_TRIGGER_TEXT = "顯示範例訊息";
+
+/**
+ * 「把我名下開著的案件全部關掉」的暗號，**只給 debug 用**。
+ *
+ * 測試時同一個帳號會連續通報，而 15 分鐘的補充窗口會把後面每一則都併進
+ * 前一筆案件 —— 想測「新建案件」的路徑就得等 15 分鐘，或手動進 D1 改狀態。
+ * 這句話就是那把剪刀。
+ *
+ * 刻意不放進 Rich Menu 也不做成 Quick Reply 按鈕：它對真正的災民沒有意義，
+ * 誤觸的代價卻是自己的求助案件整批消失。知道這句話的人才用得到它。
+ */
+const RESET_TRIGGER_TEXT = "重置我的測試案件";
 
 const EXAMPLE_REPLY_TEXT = `這是範例格式，您可以參考這樣描述您的狀況：\n\n「${EXAMPLE_REPORT_TEXT}」\n\n照這個方式打好您自己的狀況後，直接傳送出來就可以囉！`;
 
@@ -534,6 +547,27 @@ async function processLineEvents(env: Env, events: LineEvent[]) {
       if (text.trim() === EXAMPLE_TRIGGER_TEXT) {
         if (event.replyToken) {
           await replyMessage(env, event.replyToken, EXAMPLE_REPLY_TEXT);
+        }
+        continue;
+      }
+
+      // Debug 暗號：關掉這位使用者名下所有還開著的案件。
+      // 跟範例暗號同一套作法 —— trim 後完全相等比對（不是包含比對，免得
+      // 真實通報裡剛好提到這幾個字就被整批關案），處理完就 continue，
+      // 不進 AI、不進 geocode、不建案件。
+      if (text.trim() === RESET_TRIGGER_TEXT) {
+        // 拿不到 userId 就沒有「名下」可言，關不了也不該關別人的 ——
+        // 靜默跳過，不回覆（實務上使用者訊息一定帶 userId）。
+        if (!userId) continue;
+        const closed = await closeOpenCasesForUser(env, userId);
+        if (event.replyToken) {
+          await replyMessage(
+            env,
+            event.replyToken,
+            closed > 0
+              ? `已關閉您名下 ${closed} 筆測試案件，可以開始新的測試。`
+              : "目前沒有您名下開啟中的案件。"
+          );
         }
         continue;
       }
