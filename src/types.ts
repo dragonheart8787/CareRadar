@@ -24,6 +24,9 @@ export interface ExtractedFields {
   no_water: boolean;
   no_electricity: boolean;
   need_types: string[];
+  // 通行阻礙（路斷、車輛進不去、需徒步等）。選填：AI 沒抽到就是 null，
+  // 不代表資料有問題，所以不在 CRITICAL_FIELDS 裡、也不會觸發追問。
+  access_obstacle: string | null;
   volunteers_needed: number | null;
   summary: string;
   // 是否透露立即性生命危險。純粹用來決定回覆要不要附上 119/110 提醒 ——
@@ -51,6 +54,7 @@ export interface CaseRow {
   no_water: number;
   no_electricity: number;
   need_types: string | null; // JSON string in DB
+  access_obstacle: string | null;
   volunteers_needed: number;
   volunteers_assigned: number;
   summary: string | null;

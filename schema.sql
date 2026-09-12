@@ -28,6 +28,7 @@ CREATE TABLE IF NOT EXISTS cases (
   no_water                INTEGER DEFAULT 0,
   no_electricity          INTEGER DEFAULT 0,
   need_types              TEXT,                              -- JSON array, e.g. ["debris_removal","drinking_water"]
+  access_obstacle         TEXT,                              -- 通行阻礙的簡短描述，例如「產業道路坍方」。純資訊性質，不進 Care Score 也不算關鍵欄位
 
   volunteers_needed       INTEGER NOT NULL DEFAULT 1,
   volunteers_assigned     INTEGER NOT NULL DEFAULT 0,

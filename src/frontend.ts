@@ -64,6 +64,12 @@ export function renderHtml(): string {
   .tag{ font-size:11px; padding:2px 8px; border-radius:100px; border:1px solid var(--line); color:var(--ink-dim); }
   .tag.warn{ color:var(--red); border-color:var(--red); }
   .tag.ok{ color:var(--teal); border-color:var(--teal); }
+  /* 通行阻礙：跟「待人工複核」面板同一組琥珀色，但刻意用另一種形狀 ——
+     那邊是填滿背景的整塊面板，這裡只用一條左邊界，避免兩者在畫面上糊成一團。 */
+  .access-obstacle{
+    font-size:11.5px; line-height:1.45; color:var(--amber);
+    border-left:2px solid var(--amber); padding:1px 0 1px 8px; margin:0 0 8px;
+  }
 
   .bars{ display:flex; height:6px; border-radius:4px; overflow:hidden; background:var(--panel-2); margin-bottom:8px; }
   .bar-v{ background:#c85fbf; } .bar-s{ background:var(--red); }
@@ -217,6 +223,7 @@ function renderList(cases){
             \${c.needs_human_verification ? '<span class="tag warn">資訊待複核</span>' : ''}
             \${needTypes ? '<span class="tag">' + escapeHtml(needTypes) + '</span>' : ''}
           </div>
+          \${c.access_obstacle ? '<div class="access-obstacle">⚠️ 通行阻礙：' + escapeHtml(c.access_obstacle) + '</div>' : ''}
         </div>
         <div style="text-align:right">
           <div class="score">\${b.total.toFixed(1)}</div>

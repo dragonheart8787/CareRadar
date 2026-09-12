@@ -164,10 +164,10 @@ export async function insertCase(
       source, reporter_line_user_id, raw_text, location_text,
       exact_lat, exact_lng, public_lat, public_lng,
       age, lives_alone, mobility_impaired, has_young_children, household_size,
-      flood_depth_cm, no_water, no_electricity, need_types,
+      flood_depth_cm, no_water, no_electricity, need_types, access_obstacle,
       volunteers_needed, volunteers_assigned, summary,
       confidence_score, needs_human_verification, possible_duplicate_of, status
-    ) VALUES (?,?,?,?, ?,?,?,?, ?,?,?,?,?, ?,?,?,?, ?,0,?, ?,?,?, 'open')
+    ) VALUES (?,?,?,?, ?,?,?,?, ?,?,?,?,?, ?,?,?,?,?, ?,0,?, ?,?,?, 'open')
     RETURNING *`
   )
     .bind(
@@ -188,6 +188,7 @@ export async function insertCase(
       fields.no_water ? 1 : 0,
       fields.no_electricity ? 1 : 0,
       JSON.stringify(fields.need_types ?? []),
+      fields.access_obstacle,
       volunteersNeeded,
       fields.summary,
       0, // confidence_score 先塞 0，下面用真正的 row 算完再 UPDATE
@@ -330,6 +331,8 @@ export async function supplementCase(
       existing.has_young_children ?? boolToInt(newFields.has_young_children),
     household_size: existing.household_size ?? newFields.household_size,
     flood_depth_cm: existing.flood_depth_cm ?? newFields.flood_depth_cm,
+    // 跟其他欄位同一條規則：現有值是 null 才採用新值，否則保留。
+    access_obstacle: existing.access_obstacle ?? newFields.access_obstacle,
     // volunteers_needed 在 schema 是 NOT NULL DEFAULT 1，永遠不會是 null，
     // 依「現有值非 null 就保留」的規則，固定沿用現有值。
     volunteers_needed: existing.volunteers_needed,
@@ -355,6 +358,7 @@ export async function supplementCase(
        age = ?, lives_alone = ?, mobility_impaired = ?,
        has_young_children = ?, household_size = ?,
        flood_depth_cm = ?, no_water = ?, no_electricity = ?, need_types = ?,
+       access_obstacle = ?,
        volunteers_needed = ?, raw_text = ?, summary = ?,
        confidence_score = ?, needs_human_verification = ?,
        updated_at = datetime('now')
@@ -376,6 +380,7 @@ export async function supplementCase(
       merged.no_water,
       merged.no_electricity,
       merged.need_types,
+      merged.access_obstacle,
       merged.volunteers_needed,
       merged.raw_text,
       merged.summary,

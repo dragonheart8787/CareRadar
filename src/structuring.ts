@@ -39,6 +39,11 @@ const EXTRACTION_SCHEMA = {
         enum: VALID_NEED_TYPES,
       },
     },
+    access_obstacle: {
+      type: ["string", "null"],
+      description:
+        "只有在文字裡明確提到聯外道路、通行方式有障礙時才填寫，用簡短原文摘要描述，例如「產業道路坍方」「橋斷需繞路」「巷子太窄大型車進不去」「需要徒步進入」。沒有明確提到就填null，不要自己推測或腦補。",
+    },
     volunteers_needed: { type: ["integer", "null"], description: "需要幾位志工協助" },
     summary: { type: "string", description: "一句話中文摘要，給志工快速判讀" },
     emergency_signal: {
@@ -96,6 +101,11 @@ const SYSTEM_PROMPT = `/no_think
     cleaning_supplies        → 例如：清潔用品、消毒、打掃用具
     water_electricity_repair → 例如：水電、修電線、通水管
     other                    → 上述都不符合時才用這個
+- access_obstacle 只在文字明確提到「路不通、車進不去、要用走的」這類通行狀況時才填，
+  用簡短的原文摘要描述（例如「產業道路坍方」「橋斷需繞路」「巷子太窄大型車進不去」
+  「需要徒步進入」）。這是給志工評估怎麼抵達現場用的，填錯比不填更糟 —— 志工可能
+  因此開了不該開的車種、或白跑一趟。**寧可不填也不要腦補**：淹水很深、住得偏遠、
+  在山區，這些都不等於路不通，沒有明確講到通行狀況就填 null。
 - summary 用一句話繁體中文摘要，包含地區、人數、最急迫的需求，給志工在3秒內看懂。
   地區請只用縣市/鄉鎮區等級（例如「台南仁德」），絕對不要在摘要中包含詳細街道、
   門牌號碼等可定位到特定住戶的資訊。
@@ -166,6 +176,11 @@ export async function extractFields(
     no_water: parsed.no_water === true,
     no_electricity: parsed.no_electricity === true,
     need_types: normalizeNeedTypes(parsed.need_types),
+    // 比照 location_text：只用 trim 的結果判斷空不空，存下去的仍是模型原本的字串。
+    access_obstacle:
+      typeof parsed.access_obstacle === "string" && parsed.access_obstacle.trim()
+        ? parsed.access_obstacle
+        : null,
     // min 設 1：0 與負數會變成 null，交給 insertCase 既有的 `?? 1` 補上預設值。
     volunteers_needed: normalizeBoundedInt(parsed.volunteers_needed, 1, Infinity),
     // 抽取失敗時**不能**拿 rawText 當 fallback —— summary 會出現在公開的

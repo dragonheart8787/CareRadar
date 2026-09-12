@@ -32,6 +32,10 @@ function toApiCase(row: CaseRow) {
     confidence_score: row.confidence_score,
     needs_human_verification: row.needs_human_verification === 1,
     need_types_parsed: safeParseArray(row.need_types),
+    // 通行阻礙是給志工評估怎麼抵達現場用的，本來就該公開。prompt 要求它只寫
+    // 通行狀況（「產業道路坍方」），不是住址 —— 但它終究是使用者輸入衍生的
+    // 文字，前端渲染時一律逸出。
+    access_obstacle: row.access_obstacle,
     reported_at: row.reported_at,
     score_breakdown: computeCareScore(row),
   };
