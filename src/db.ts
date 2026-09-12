@@ -334,6 +334,31 @@ export async function findPendingSupplementCase(
  * 使用者補充時常常只回答被問到的那幾項，其餘欄位模型可能抽出 null 或
  * 抽錯，若讓新值蓋掉舊值，等於讓一次追問把原本正確的資料洗掉。
  */
+/**
+ * 合併後的 raw_text 上限。1000 個字元大約是 LINE 上五、六則一般長度通報的量，
+ * 後台人工複核時還讀得完；再長下去那個欄位就只是一坨沒人會看的字。
+ */
+const RAW_TEXT_MAX_LENGTH = 1000;
+
+/** 超過上限時，取代掉舊內容的那句說明。 */
+const RAW_TEXT_TRUNCATED_NOTICE = "（先前通報內容已省略，以下為最新一次補充）";
+
+/**
+ * 累積對話軌跡，但不讓它無限成長。
+ *
+ * 超過上限時**丟掉舊的、完整保留最新一次**，而不是從中間截斷 —— 截斷會製造
+ * 半句話，人工複核時看到「…家裡淹水大概八十公」根本無從判斷，比乾脆不給
+ * 更糟。最新一次補充通常也是最相關的那一段。
+ *
+ * 最新一次本身就超過上限的情況刻意不截它：那是使用者真的打了那麼多字，
+ * 硬切只會切掉他最後想講的話。上限管的是「累積」，不是「使用者能打多長」。
+ */
+function mergeRawText(existingRawText: string, newRawText: string): string {
+  const merged = `${existingRawText}\n---\n${newRawText}`;
+  if (merged.length <= RAW_TEXT_MAX_LENGTH) return merged;
+  return `${RAW_TEXT_TRUNCATED_NOTICE}\n---\n${newRawText}`;
+}
+
 export async function supplementCase(
   env: Env,
   caseId: number,
@@ -359,8 +384,8 @@ export async function supplementCase(
     ])
   );
 
-  // 保留完整對話軌跡，之後人工複核看得到使用者原話。
-  const mergedRawText = `${existing.raw_text}\n---\n${newRawText}`;
+  // 保留完整對話軌跡，之後人工複核看得到使用者原話 —— 但不是無上限地留。
+  const mergedRawText = mergeRawText(existing.raw_text, newRawText);
 
   const newSummary = (newFields.summary ?? "").trim();
   const mergedSummary = !newSummary
