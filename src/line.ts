@@ -555,7 +555,16 @@ async function processLineEvents(env: Env, events: LineEvent[]) {
       // 跟範例暗號同一套作法 —— trim 後完全相等比對（不是包含比對，免得
       // 真實通報裡剛好提到這幾個字就被整批關案），處理完就 continue，
       // 不進 AI、不進 geocode、不建案件。
-      if (text.trim() === RESET_TRIGGER_TEXT) {
+      //
+      // 整個分支被 ENABLE_DEBUG_RESET 關在後面，且只認字串 "true"：沒設定、
+      // 設成 "false"、"1"、空字串，一律視同關閉（fail-closed）。這個功能一次
+      // 關掉一個人名下所有 open 案件、沒有復原路徑，不該留在正式環境裡。
+      //
+      // 沒開啟時**不回任何「功能未開放」之類的訊息**，而是讓這句話原封不動
+      // 往下走一般的 AI 抽取流程 —— 那會建立一筆內容沒什麼意義的案件，但
+      // 從外部看起來就跟隨便打一句話沒兩樣。刻意如此：任何「這個指令存在
+      // 但被關掉了」的回應，本身就是在告訴外面的人有這個指令可以找。
+      if (env.ENABLE_DEBUG_RESET === "true" && text.trim() === RESET_TRIGGER_TEXT) {
         // 拿不到 userId 就沒有「名下」可言，關不了也不該關別人的 ——
         // 靜默跳過，不回覆（實務上使用者訊息一定帶 userId）。
         if (!userId) continue;

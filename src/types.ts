@@ -8,6 +8,11 @@ export interface Env {
   // 後台頁面金鑰。用 Dashboard 的 Variables and Secrets 設定，不進 wrangler.toml。
   // 沒設定時後台一律視為未授權（fail-closed），不會變成「沒設就不用驗」。
   ADMIN_KEY?: string;
+  // Debug 用的「重置我的測試案件」暗號開關。只有值剛好是字串 "true" 才啟用，
+  // 沒設定或設成別的值一律關閉（fail-closed，跟 ADMIN_KEY 同一個方向）。
+  // 正式對外的環境不該設這個 —— 那句暗號一次關掉使用者名下所有 open 案件，
+  // 而且沒有復原路徑。
+  ENABLE_DEBUG_RESET?: string;
 }
 
 // AI 從自然語言抽取出來的結構化欄位。
