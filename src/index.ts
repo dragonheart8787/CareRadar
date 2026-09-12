@@ -36,6 +36,9 @@ function toApiCase(row: CaseRow) {
     // 通行狀況（「產業道路坍方」），不是住址 —— 但它終究是使用者輸入衍生的
     // 文字，前端渲染時一律逸出。
     access_obstacle: row.access_obstacle,
+    // 這組座標是 GPS 還是文字猜的、精確到什麼程度。志工在出發前該知道
+    // 「地圖上這個點有多可信」，所以跟 public_lat/lng 一樣公開。
+    location_precision: row.location_precision,
     reported_at: row.reported_at,
     score_breakdown: computeCareScore(row),
   };

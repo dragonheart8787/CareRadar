@@ -1,4 +1,10 @@
-import type { CaseRow, ClaimResult, Env, ExtractedFields } from "./types";
+import type {
+  CaseRow,
+  ClaimResult,
+  Env,
+  ExtractedFields,
+  LocationPrecision,
+} from "./types";
 import { computeConfidenceScore, needsHumanVerification } from "./care_score";
 
 /**
@@ -8,6 +14,21 @@ import { computeConfidenceScore, needsHumanVerification } from "./care_score";
  * 所以調整這個值不需要對正式環境的 D1 做任何 schema 變更。
  */
 const CLAIM_TOKEN_VALID_HOURS = 72;
+
+/**
+ * 座標精確度的合併規則。
+ *
+ * GPS 一律壓過任何文字猜測的結果 —— 就算案件已經有一組 Nominatim 猜出來的
+ * 座標，使用者後來願意分享 GPS，那組才是對的，沒有理由抱著舊的猜測不放。
+ * 其他情況沿用全檔一致的「現有值非 null 就保留」，不讓後來的文字覆蓋先前的。
+ */
+function mergeLocationPrecision(
+  existing: LocationPrecision | null,
+  incoming: LocationPrecision | null
+): LocationPrecision | null {
+  if (incoming === "gps" && existing !== "gps") return incoming;
+  return existing ?? incoming;
+}
 
 export async function logHistory(
   env: Env,
@@ -148,6 +169,7 @@ export async function insertCase(
     fields: ExtractedFields;
     exact: { lat: number; lng: number } | null;
     fuzzed: { lat: number; lng: number } | null;
+    precision?: LocationPrecision | null;
   }
 ): Promise<CaseRow> {
   const { fields } = params;
@@ -162,12 +184,12 @@ export async function insertCase(
   const result = await env.DB.prepare(
     `INSERT INTO cases (
       source, reporter_line_user_id, raw_text, location_text,
-      exact_lat, exact_lng, public_lat, public_lng,
+      exact_lat, exact_lng, public_lat, public_lng, location_precision,
       age, lives_alone, mobility_impaired, has_young_children, household_size,
       flood_depth_cm, no_water, no_electricity, need_types, access_obstacle,
       volunteers_needed, volunteers_assigned, summary,
       confidence_score, needs_human_verification, possible_duplicate_of, status
-    ) VALUES (?,?,?,?, ?,?,?,?, ?,?,?,?,?, ?,?,?,?,?, ?,0,?, ?,?,?, 'open')
+    ) VALUES (?,?,?,?, ?,?,?,?,?, ?,?,?,?,?, ?,?,?,?,?, ?,0,?, ?,?,?, 'open')
     RETURNING *`
   )
     .bind(
@@ -179,6 +201,8 @@ export async function insertCase(
       params.exact?.lng ?? null,
       params.fuzzed?.lat ?? null,
       params.fuzzed?.lng ?? null,
+      // 沒有座標就沒有精確度可言 —— 不要留下一個「有精確度但沒有點」的矛盾列。
+      params.exact ? (params.precision ?? null) : null,
       fields.age,
       boolToInt(fields.lives_alone),
       boolToInt(fields.mobility_impaired),
@@ -283,7 +307,8 @@ export async function supplementCase(
   newFields: ExtractedFields,
   newRawText: string,
   newExact: { lat: number; lng: number } | null,
-  newFuzzed: { lat: number; lng: number } | null
+  newFuzzed: { lat: number; lng: number } | null,
+  newPrecision: LocationPrecision | null = null
 ): Promise<CaseRow> {
   const existing = await getCase(env, caseId);
   if (!existing) throw new Error(`Case ${caseId} not found`);
@@ -341,6 +366,12 @@ export async function supplementCase(
     need_types: JSON.stringify(mergedNeedTypes),
     raw_text: mergedRawText,
     summary: mergedSummary,
+    // 座標的精確度跟著座標走：這次真的採用了新座標才換精確度，否則沿用舊的。
+    // （文字路徑的 newPrecision 不可能是 "gps"，所以這裡實際上只會走
+    //   「現有值非 null 就保留」那一支；規則仍然共用同一個函式，不另立標準。）
+    location_precision: adoptCoords
+      ? mergeLocationPrecision(existing.location_precision, newPrecision)
+      : existing.location_precision,
     exact_lat: adoptCoords ? newExact.lat : existing.exact_lat,
     exact_lng: adoptCoords ? newExact.lng : existing.exact_lng,
     public_lat: adoptCoords ? (newFuzzed?.lat ?? null) : existing.public_lat,
@@ -354,7 +385,7 @@ export async function supplementCase(
   const updated = await env.DB.prepare(
     `UPDATE cases SET
        location_text = ?, exact_lat = ?, exact_lng = ?,
-       public_lat = ?, public_lng = ?,
+       public_lat = ?, public_lng = ?, location_precision = ?,
        age = ?, lives_alone = ?, mobility_impaired = ?,
        has_young_children = ?, household_size = ?,
        flood_depth_cm = ?, no_water = ?, no_electricity = ?, need_types = ?,
@@ -371,6 +402,7 @@ export async function supplementCase(
       merged.exact_lng,
       merged.public_lat,
       merged.public_lng,
+      merged.location_precision,
       merged.age,
       merged.lives_alone,
       merged.mobility_impaired,
@@ -523,12 +555,19 @@ export async function supplementCaseLocation(
   caseId: number,
   exact: { lat: number; lng: number },
   fuzzed: { lat: number; lng: number },
-  addressText: string
+  addressText: string,
+  // 呼叫端明示這組座標的來源。目前只有 GPS 分享會走到這個函式，讓它當參數
+  // 而不是寫死在裡面，是為了讓呼叫端一眼看得出「這條路徑存的是什麼精確度」。
+  precision: LocationPrecision = "gps"
 ): Promise<CaseRow | null> {
   const existing = await getCase(env, caseId);
   if (!existing) return null;
 
-  if (existing.exact_lat !== null || existing.exact_lng !== null) {
+  // 已經有座標時，只有「現有的不是 GPS」才值得覆蓋 —— 使用者親自分享的位置
+  // 永遠勝過 Nominatim 從文字猜出來的點。已經是 GPS 就沒有更好的可換，直接
+  // 返回，也順便讓重複分享同一個位置變成 no-op。
+  const hasCoords = existing.exact_lat !== null || existing.exact_lng !== null;
+  if (hasCoords && existing.location_precision === precision) {
     return existing;
   }
 
@@ -537,11 +576,17 @@ export async function supplementCaseLocation(
   // 會停在補位置之前的舊值，跟 describeMissingFields 講的話對不起來。
   const merged: CaseRow = {
     ...existing,
-    location_text: addressText,
+    // 座標換成 GPS，但文字地址沿用既有的：addressText 是 LINE 對這組座標的
+    // 描述，拿不到時只是字串 "分享位置"，用它蓋掉使用者親口講的門牌是倒退。
+    location_text: existing.location_text ?? addressText,
     exact_lat: exact.lat,
     exact_lng: exact.lng,
     public_lat: fuzzed.lat,
     public_lng: fuzzed.lng,
+    location_precision: mergeLocationPrecision(
+      existing.location_precision,
+      precision
+    ),
   };
   const confidence = computeConfidenceScore(merged);
   const needsVerify = needsHumanVerification(confidence) ? 1 : 0;
@@ -549,7 +594,7 @@ export async function supplementCaseLocation(
   const updated = await env.DB.prepare(
     `UPDATE cases SET
        location_text = ?, exact_lat = ?, exact_lng = ?,
-       public_lat = ?, public_lng = ?,
+       public_lat = ?, public_lng = ?, location_precision = ?,
        confidence_score = ?, needs_human_verification = ?,
        updated_at = datetime('now')
      WHERE id = ?
@@ -561,6 +606,7 @@ export async function supplementCaseLocation(
       merged.exact_lng,
       merged.public_lat,
       merged.public_lng,
+      merged.location_precision,
       confidence,
       needsVerify,
       caseId

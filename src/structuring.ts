@@ -1,4 +1,4 @@
-import type { Env, ExtractedFields } from "./types";
+import type { Env, ExtractedFields, LocationPrecision } from "./types";
 
 // Qwen3 30B (MoE, function-calling + JSON schema support), 32K context,
 // strong multilingual/Chinese quality. Runs on Cloudflare's own Workers AI —
@@ -44,6 +44,12 @@ const EXTRACTION_SCHEMA = {
       description:
         "只有在文字裡明確提到聯外道路、通行方式有障礙時才填寫，用簡短原文摘要描述，例如「產業道路坍方」「橋斷需繞路」「巷子太窄大型車進不去」「需要徒步進入」。沒有明確提到就填null，不要自己推測或腦補。",
     },
+    location_detail_level: {
+      type: "string",
+      enum: ["district", "street"],
+      description:
+        "評估location_text的詳細程度。只有縣市/鄉鎮區層級（例如「台南仁德」「高雄鳳山」）填district；有明確路名、巷弄或門牌號（例如「仁德區中正路三段100號」「中山路52巷」）填street。location_text是null的情況這個欄位固定填district。",
+    },
     volunteers_needed: { type: ["integer", "null"], description: "需要幾位志工協助" },
     summary: { type: "string", description: "一句話中文摘要，給志工快速判讀" },
     emergency_signal: {
@@ -72,6 +78,7 @@ const EXTRACTION_SCHEMA = {
     "summary",
     "emergency_signal",
     "emotional_distress_signal",
+    "location_detail_level",
   ],
 } as const;
 
@@ -101,6 +108,11 @@ const SYSTEM_PROMPT = `/no_think
     cleaning_supplies        → 例如：清潔用品、消毒、打掃用具
     water_electricity_repair → 例如：水電、修電線、通水管
     other                    → 上述都不符合時才用這個
+- location_detail_level 是對 location_text 詳細程度的評估，只有兩個值：只講到
+  縣市／鄉鎮區（「台南仁德」「高雄鳳山」）填 district；有明確路名、巷弄或門牌號
+  （「仁德區中正路三段100號」「中山路52巷」）填 street。location_text 是 null 時
+  固定填 district。這個欄位只用來決定要不要提醒使用者補個更詳細的地址，
+  不影響案件本身的任何評分。
 - access_obstacle 只在文字明確提到「路不通、車進不去、要用走的」這類通行狀況時才填，
   用簡短的原文摘要描述（例如「產業道路坍方」「橋斷需繞路」「巷子太窄大型車進不去」
   「需要徒步進入」）。這是給志工評估怎麼抵達現場用的，填錯比不填更糟 —— 志工可能
@@ -181,6 +193,11 @@ export async function extractFields(
       typeof parsed.access_obstacle === "string" && parsed.access_obstacle.trim()
         ? parsed.access_obstacle
         : null,
+    // 只有明確等於 "street" 才當成 street，其餘（包含模型亂填、漏填、填了
+    // enum 以外的字串）一律當 district。方向是刻意保守的：判斷失誤時，
+    // 多問一句「能不能補門牌」的成本，遠低於漏掉一個真的只給了鄉鎮區的案件。
+    location_detail_level:
+      parsed.location_detail_level === "street" ? "street" : "district",
     // min 設 1：0 與負數會變成 null，交給 insertCase 既有的 `?? 1` 補上預設值。
     volunteers_needed: normalizeBoundedInt(parsed.volunteers_needed, 1, Infinity),
     // 抽取失敗時**不能**拿 rawText 當 fallback —— summary 會出現在公開的
@@ -260,9 +277,33 @@ function normalizeNeedTypes(value: unknown): string[] {
  *   - 正式上線規模變大後，應改用付費地理編碼服務或內政部門牌坐標服務
  * https://operations.osmfoundation.org/policies/nominatim/
  */
+/**
+ * Nominatim 回應裡的 type（有時是 class）→ 我們的精確度分級。
+ *
+ * 白名單只收「確定對應到單一建築物或門牌」的類型，**其餘一律歸 low，包含
+ * 沒看過的類型**。方向是刻意不對稱的：
+ *   低估精確度的代價 → 卡片上寫「僅供參考」，志工到現場多花幾分鐘找。
+ *   高估精確度的代價 → 卡片上寫「精確定位」，志工直接照座標開過去，
+ *                       結果那是整個行政區的代表點，差了好幾百公尺。
+ * 一個標榜「幫志工找到人」的系統，不該在這個方向上賭。Nominatim 的類型
+ * 清單也會隨資料更新而增加，預設 low 才不會有新類型自動被當成高精度。
+ */
+export function classifyNominatimPrecision(
+  nominatimType: string
+): "nominatim_high" | "nominatim_low" {
+  const HIGH_PRECISION_TYPES = ["house", "building", "residential"];
+  return HIGH_PRECISION_TYPES.includes(nominatimType)
+    ? "nominatim_high"
+    : "nominatim_low";
+}
+
 export async function geocode(
   locationText: string | null
-): Promise<{ lat: number; lng: number } | null> {
+): Promise<{
+  lat: number;
+  lng: number;
+  precision: "nominatim_high" | "nominatim_low";
+} | null> {
   if (!locationText) return null;
   try {
     const url = new URL("https://nominatim.openstreetmap.org/search");
@@ -275,9 +316,22 @@ export async function geocode(
       },
     });
     if (!res.ok) return null;
-    const results = (await res.json()) as { lat: string; lon: string }[];
+    const results = (await res.json()) as {
+      lat: string;
+      lon: string;
+      type?: string;
+      class?: string;
+    }[];
     if (!results.length) return null;
-    return { lat: parseFloat(results[0].lat), lng: parseFloat(results[0].lon) };
+    // type 是 Nominatim 對這筆結果的細分類（house / city / administrative…），
+    // class 是它的大類（place / building…）。優先看 type，缺了才退回 class，
+    // 兩個都沒有就交給分類函式走預設的 low。
+    const rawType = results[0].type ?? results[0].class ?? "";
+    return {
+      lat: parseFloat(results[0].lat),
+      lng: parseFloat(results[0].lon),
+      precision: classifyNominatimPrecision(rawType),
+    };
   } catch {
     // 地理編碼失敗不該讓整個通報流程失敗 —— 案件仍然要被存下來，
     // 只是暫時沒有座標，之後可以在後台手動補。

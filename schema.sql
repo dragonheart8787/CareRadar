@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS cases (
   exact_lng               REAL,
   public_lat              REAL,                              -- 模糊化座標（公開地圖用）
   public_lng              REAL,
+  location_precision      TEXT,                              -- gps | nominatim_high | nominatim_low | NULL：座標怎麼來的、精確到什麼程度
 
   age                     INTEGER,
   lives_alone             INTEGER,                           -- 0/1, NULL=未知

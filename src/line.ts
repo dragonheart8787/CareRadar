@@ -221,6 +221,27 @@ const EXAMPLE_REPORT_TEXT =
   "我住台南仁德，76歲，一個人住，家裡淹了60公分，需要兩個人幫忙搬家具，也沒有飲用水。";
 
 /**
+ * 鼓勵使用 LINE 原生「分享位置」的提示。追問訊息與歡迎訊息共用同一份 ——
+ * 兩處各寫一次遲早會漂移成兩種說法。
+ *
+ * 之所以主動推這個功能：Nominatim 只能還給我們「使用者打了多少細節」對應的
+ * 精確度，而開發過程實測發現，寫得越詳細的門牌反而越容易解析失敗（見 README
+ * 的「地理編碼精確度的反直覺實測結果」）。GPS 沒有這個問題。
+ */
+const SHARE_LOCATION_HINT =
+  "另外，如果方便的話，也可以直接用LINE的「分享位置」功能傳送您的所在位置，這樣我們能更準確地標示您的位置，方便志工找到您。";
+
+/**
+ * 地址只講到鄉鎮區時，附在回覆「最後面」的補充建議。
+ *
+ * 位置跟 emergency / emotional 兩個前綴剛好相反，而且是刻意的：那兩個是
+ * 「最重要的話擺最前面」，這句是錦上添花的建議，擺最後才不會把原本的確認
+ * 或追問內容擠下去。
+ */
+const ADDRESS_DETAIL_HINT =
+  "\n\n如果方便的話，麻煩補充更詳細的地址（例如路名、巷弄、門牌號），或直接用LINE的「分享位置」功能，這樣能大幅提升志工找到您的準確度。";
+
+/**
  * 「我想看範例」的暗號文字。按鈕與 Rich Menu 都送這一句，
  * processLineEvents 認出來之後只回範例說明 —— 不進 AI 抽取、不寫 D1。
  *
@@ -265,7 +286,7 @@ function buildAddressText(
 }
 
 // 使用者第一次加好友（follow 事件）時的自我介紹訊息。
-const WELCOME_TEXT = `哈囉，歡迎加入「災後需求雷達」！\n\n這個機器人是用來通報淹水復原期間的生活需求，幫忙媒合志工協助。\n\n請直接用一段話描述您的狀況，包含以下資訊：\n・所在地區（例如：台南仁德）\n・年齡、是否獨居、是否行動不便\n・淹水深度\n・需要幾位志工協助\n・需要的協助類型（清淤、搬家具、飲用水、清潔用品、水電）\n・目前是否缺水缺電\n\n範例：\n「${EXAMPLE_REPORT_TEXT}」\n\n打好之後直接傳送就可以了，我們會盡快協助媒合志工。`;
+const WELCOME_TEXT = `哈囉，歡迎加入「災後需求雷達」！\n\n這個機器人是用來通報淹水復原期間的生活需求，幫忙媒合志工協助。\n\n請直接用一段話描述您的狀況，包含以下資訊：\n・所在地區（例如：台南仁德）\n・年齡、是否獨居、是否行動不便\n・淹水深度\n・需要幾位志工協助\n・需要的協助類型（清淤、搬家具、飲用水、清潔用品、水電）\n・目前是否缺水缺電\n\n範例：\n「${EXAMPLE_REPORT_TEXT}」\n\n打好之後直接傳送就可以了，我們會盡快協助媒合志工。\n\n${SHARE_LOCATION_HINT}`;
 
 // 按鈕文字送的是暗號、不是範例句本身，所以按下去只會拿到格式說明，
 // 不會憑空生出一筆案件。label 維持原樣，使用者感受不到差別。
@@ -383,7 +404,9 @@ function buildFollowUpQuestionText(missingLabels: string[]): string {
   return (
     "已經收到您的訊息，還需要以下資訊才能準確評估優先順序，麻煩直接回覆補充：\n" +
     missingLabels.join("、") +
-    "\n\n即使暫時不方便補充，我們也會請在地志工/里長協助電話確認，不會因此降低協助的優先順序。"
+    "\n\n即使暫時不方便補充，我們也會請在地志工/里長協助電話確認，不會因此降低協助的優先順序。" +
+    "\n\n" +
+    SHARE_LOCATION_HINT
   );
 }
 
@@ -555,7 +578,15 @@ async function processLineEvents(env: Env, events: LineEvent[]) {
       // 同一位使用者 15 分鐘內還有待複核的案件 → 這則當作補充，不另開新案件。
       const pending = await findPendingSupplementCase(env, userId, 15);
       const caseRow = pending
-        ? await supplementCase(env, pending.id, fields, text, exact, fuzzed)
+        ? await supplementCase(
+            env,
+            pending.id,
+            fields,
+            text,
+            exact,
+            fuzzed,
+            exact?.precision ?? null
+          )
         : await insertCase(env, {
             source: "line",
             reporterLineUserId: userId,
@@ -563,6 +594,7 @@ async function processLineEvents(env: Env, events: LineEvent[]) {
             fields,
             exact,
             fuzzed,
+            precision: exact?.precision ?? null,
           });
 
       if (event.replyToken) {
@@ -591,6 +623,21 @@ async function processLineEvents(env: Env, events: LineEvent[]) {
         }
         if (fields.emergency_signal) {
           replyText = EMERGENCY_REDIRECT_TEXT + "\n\n" + replyText;
+        }
+
+        // 只講到鄉鎮區 → 在最後面附上「補個門牌會更好」的建議。
+        //
+        // location_text 是 null 時刻意不加：那種情況缺漏清單裡本來就有
+        // 「所在地區」，追問訊息已經在問了，再補一句講門牌只會自相矛盾 ——
+        // 而且對一個連地區都沒提的人講「補路名巷弄」也搭不上。
+        //
+        // 這裡不需要另外排除 GPS 分享：那條路徑走的是 processLocationEvent，
+        // 早在上面就 continue 了，根本走不到這一段。
+        if (
+          fields.location_text !== null &&
+          fields.location_detail_level === "district"
+        ) {
+          replyText = replyText + ADDRESS_DETAIL_HINT;
         }
 
         // 資訊不足才帶快速回覆按鈕；補齊了就只回確認訊息。
@@ -686,7 +733,9 @@ async function processLocationEvent(env: Env, event: LineEvent) {
     { lat, lng },
     fuzzed,
     // address 是 LINE 自己對這組座標的地址描述，不是使用者打的字。
-    event.message?.address ?? "分享位置"
+    event.message?.address ?? "分享位置",
+    // 裝置直接給的座標，不需要（也不該）交給 classifyNominatimPrecision 分類。
+    "gps"
   );
 
   // 座標本身不改變「還缺哪些關鍵欄位」的判斷，所以不重跑

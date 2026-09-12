@@ -13,6 +13,15 @@ export interface Env {
 // AI 從自然語言抽取出來的結構化欄位。
 // 每一個欄位都允許 null —— 「不知道」跟「填 0/false」是不一樣的語意，
 // 絕對不能把抽取失敗悄悄當成「沒有這個需求」。
+/**
+ * 一組座標是怎麼來的、精確到什麼程度。
+ *   gps            → 使用者用 LINE 分享位置，裝置直接給的座標
+ *   nominatim_high → 文字地址交給 Nominatim，解析到建築物/門牌等級
+ *   nominatim_low  → 同上，但只解析到行政區等級（誤差可能數百公尺以上）
+ *   null           → 沒有座標，或這筆是在這個欄位存在之前建立的舊資料
+ */
+export type LocationPrecision = "gps" | "nominatim_high" | "nominatim_low";
+
 export interface ExtractedFields {
   location_text: string | null;
   age: number | null;
@@ -27,6 +36,10 @@ export interface ExtractedFields {
   // 通行阻礙（路斷、車輛進不去、需徒步等）。選填：AI 沒抽到就是 null，
   // 不代表資料有問題，所以不在 CRITICAL_FIELDS 裡、也不會觸發追問。
   access_obstacle: string | null;
+  // location_text 的詳細程度，只用來決定這次回覆要不要附上「補個門牌會更好」
+  // 的建議。**不寫進 D1** —— 它是這次抽取的當下判斷，不是案件的持久屬性；
+  // 案件座標的精確度由 cases.location_precision 負責，兩者不是同一件事。
+  location_detail_level: "district" | "street";
   volunteers_needed: number | null;
   summary: string;
   // 是否透露立即性生命危險。純粹用來決定回覆要不要附上 119/110 提醒 ——
@@ -45,6 +58,7 @@ export interface CaseRow {
   exact_lng: number | null;
   public_lat: number | null;
   public_lng: number | null;
+  location_precision: LocationPrecision | null;
   age: number | null;
   lives_alone: number | null;
   mobility_impaired: number | null;

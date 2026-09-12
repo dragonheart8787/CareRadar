@@ -76,6 +76,11 @@ export function renderHtml(): string {
     font-family:"IBM Plex Mono", monospace; font-size:13px; font-weight:600;
     color:var(--teal); letter-spacing:1px;
   }
+  /* 座標精確度：比 access-obstacle 再低調一階 —— 那是「可能到不了」的警示，
+     這只是「這個點有多準」的註記，不該搶同樣的視覺重量。 */
+  .precision-tag{
+    font-size:10.5px; color:var(--ink-dim); margin:0 0 8px; opacity:0.85;
+  }
   .access-obstacle{
     font-size:11.5px; line-height:1.45; color:var(--amber);
     border-left:2px solid var(--amber); padding:1px 0 1px 8px; margin:0 0 8px;
@@ -192,6 +197,18 @@ function escapeHtml(str){
  * 輸出，而 extractFields 只檢查它是不是陣列、沒有比對 enum，所以這裡的
  * 回傳值不保證永遠是寫死的中文字串 —— 呼叫端必須當成不可控內容逸出。
  */
+// 座標精確度 → 給志工看的說法。查不到的值（包含 null、以及未來新增但前端
+// 還沒跟上的值）回傳 null，卡片就完全不顯示這一行 —— 顯示一個看不懂的代號
+// 比什麼都不顯示更糟。
+function precisionLabel(p){
+  const MAP = {
+    gps: '📍精確定位',
+    nominatim_high: '📍街道等級',
+    nominatim_low: '📍僅供參考，範圍較大',
+  };
+  return MAP[p] || null;
+}
+
 function needTypeLabel(t){
   return ({
     debris_removal: '清淤', furniture_moving: '搬家具', drinking_water: '飲用水',
@@ -234,6 +251,7 @@ function renderList(cases){
             \${needTypes ? '<span class="tag">' + escapeHtml(needTypes) + '</span>' : ''}
           </div>
           \${c.access_obstacle ? '<div class="access-obstacle">⚠️ 通行阻礙：' + escapeHtml(c.access_obstacle) + '</div>' : ''}
+          \${precisionLabel(c.location_precision) ? '<div class="precision-tag">' + escapeHtml(precisionLabel(c.location_precision)) + '</div>' : ''}
         </div>
         <div style="text-align:right">
           <div class="score">\${b.total.toFixed(1)}</div>
