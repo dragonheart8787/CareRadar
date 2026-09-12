@@ -125,7 +125,7 @@ admin 後台（看得到 `raw_text`，因為人工比對重複案件需要讀原
 
 ```
 POST /api/cases/:id/claim
-  → 回應 { ...case, claim_token: "…" }        ← 只在這一次回應出現
+  → 回應 { ...case, claim_token: "…", line_verify_code: "…" }   ← 只在這一次回應出現
 
 GET /api/cases/:id/address?token=<claim_token>
   → 200 { location_text, exact_lat, exact_lng }
