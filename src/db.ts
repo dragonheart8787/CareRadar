@@ -394,18 +394,57 @@ export async function supplementCase(
       ? `${existing.summary}；補充：${newSummary}`
       : newSummary;
 
-  // location_text 是這次才第一次填上，才順帶帶入座標；原本已有座標不覆蓋。
+  // location_text 是這次才第一次填上。
   const locationJustFilled =
     existing.location_text === null && newFields.location_text !== null;
+
+  // 已經有地址，但這次補的是「更精確的一級」→ 覆蓋。
+  //
+  // 這是 location_text 唯一的例外，其他欄位仍然一律「只填空、不覆蓋」。
+  // 理由是系統自己造成的矛盾：地址只到鄉鎮區時，我們會主動提示使用者補門牌，
+  // 使用者照做之後，卻被「絕不覆蓋」把那個門牌丟掉 —— 被自己的提示引導、
+  // 又被自己的規則擋掉，那不是取捨，是 bug。
+  //
+  // 只認 district → street 這一個方向。兩次都是 street 時維持原值：判斷
+  // 「兩個路名誰更精確」需要的資訊我們沒有，猜錯的代價是把對的地址換成錯的，
+  // 不值得為此過度設計。street → district 更不用說，那是往回退。
+  //
+  // 「現有的是粗略的」沒有直接的資料可查：location_detail_level 刻意不寫進 D1
+  // （它是抽取當下的判斷，不是案件屬性），所以這裡用已經存下來的
+  // location_precision 當代理指標 —— nominatim_high 代表既有地址當初解析到了
+  // 建築物層級，就當它已經夠精確、不再被覆蓋。這個代理不完美，限制寫在報告裡。
+  const existingLocationIsCoarse =
+    existing.location_precision !== "nominatim_high";
+
+  const locationUpgraded =
+    existing.location_text !== null &&
+    newFields.location_text !== null &&
+    newFields.location_detail_level === "street" &&
+    existingLocationIsCoarse;
+
+  const adoptLocationText = locationJustFilled || locationUpgraded;
+
+  // 座標必須跟著地址走，否則會出現「地址更新成門牌、座標還是舊的區級中心點」
+  // 這種對不起來的狀態。newExact 本來就是呼叫端拿「這次的 location_text」去
+  // geocode 得到的（見 line.ts：geocode 先於 supplementCase），所以直接採用
+  // 即可，不需要在這裡重新查一次。
+  //
+  // 唯一不跟著換的是已經有 GPS 座標的案件：使用者親自分享的位置比任何從文字
+  // 猜出來的點都準，不該被一個新的文字地址蓋掉。這條線跟 supplementCaseLocation
+  // 的「GPS 優先」是同一個原則，只是方向相反。
   const adoptCoords =
-    locationJustFilled &&
     newExact !== null &&
-    existing.exact_lat === null &&
-    existing.exact_lng === null;
+    existing.location_precision !== "gps" &&
+    (locationUpgraded ||
+      (locationJustFilled &&
+        existing.exact_lat === null &&
+        existing.exact_lng === null));
 
   const merged: CaseRow = {
     ...existing,
-    location_text: existing.location_text ?? newFields.location_text,
+    location_text: adoptLocationText
+      ? newFields.location_text
+      : existing.location_text,
     age: existing.age ?? newFields.age,
     lives_alone: existing.lives_alone ?? boolToInt(newFields.lives_alone),
     mobility_impaired:
@@ -427,8 +466,13 @@ export async function supplementCase(
     // 座標的精確度跟著座標走：這次真的採用了新座標才換精確度，否則沿用舊的。
     // （文字路徑的 newPrecision 不可能是 "gps"，所以這裡實際上只會走
     //   「現有值非 null 就保留」那一支；規則仍然共用同一個函式，不另立標準。）
+    // 採用新座標時，精確度必須跟著換成「描述這組新座標」的那一個 ——
+    // 不能沿用舊值，否則會出現「座標是門牌等級、標籤卻寫著僅供參考」的矛盾。
+    // 這裡不走 mergeLocationPrecision（那條規則是「既有值優先」，對座標本身
+    // 被換掉的情況剛好相反）；existing 是 gps 時 adoptCoords 必為 false，
+    // 所以 GPS 優先原則不會被這行繞過。
     location_precision: adoptCoords
-      ? mergeLocationPrecision(existing.location_precision, newPrecision)
+      ? newPrecision
       : existing.location_precision,
     exact_lat: adoptCoords ? newExact.lat : existing.exact_lat,
     exact_lng: adoptCoords ? newExact.lng : existing.exact_lng,
