@@ -493,7 +493,11 @@ async function processLineEvents(env: Env, events: LineEvent[]) {
       // 不碰 AI、不碰 geocode、不碰 D1，本來就不是限流要保護的資源；而一個
       // 正在通報受困、溺水的人，最不該因為「發太多則」而被擋掉這則 119/110。
       let replyTokenUsed = false;
-      if (event.replyToken && containsEmergencyKeyword(text)) {
+      // 存成變數而不是即用即丟：底下決定要不要附加「補地址」建議時還要看它。
+      // 刻意不跟 event.replyToken 綁在一起 —— 那個條件只決定「這則 119/110
+      // 送不送得出去」，不改變「這則訊息是不是緊急狀況」這個事實。
+      const emergencyKeywordHit = containsEmergencyKeyword(text);
+      if (event.replyToken && emergencyKeywordHit) {
         await replyMessage(env, event.replyToken, EMERGENCY_REDIRECT_TEXT);
         replyTokenUsed = true;
       }
@@ -676,7 +680,13 @@ async function processLineEvents(env: Env, events: LineEvent[]) {
         //
         // 這裡不需要另外排除 GPS 分享：那條路徑走的是 processLocationEvent，
         // 早在上面就 continue 了，根本走不到這一段。
+        //
+        // 命中緊急關鍵字時一律不加：那則回覆的重點是「請打 119／110」，後面
+        // 再追一句「麻煩補充路名巷弄」等於要一個正在通報受困的人先去想門牌。
+        // 這裡看的是關鍵字那一層（emergencyKeywordHit），不是 AI 判斷的
+        // emergency_signal —— 後者要不要一起排除還沒決定，先只處理這一層。
         if (
+          !emergencyKeywordHit &&
           fields.location_text !== null &&
           fields.location_detail_level === "district"
         ) {
