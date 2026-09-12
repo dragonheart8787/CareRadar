@@ -6,6 +6,7 @@ import {
   insertCase,
   supplementCase,
   supplementCaseLocation,
+  verifyAndBindLineCode,
 } from "./db";
 
 interface LineEvent {
@@ -230,6 +231,38 @@ const EXAMPLE_REPORT_TEXT =
 const EXAMPLE_TRIGGER_TEXT = "顯示範例訊息";
 
 const EXAMPLE_REPLY_TEXT = `這是範例格式，您可以參考這樣描述您的狀況：\n\n「${EXAMPLE_REPORT_TEXT}」\n\n照這個方式打好您自己的狀況後，直接傳送出來就可以囉！`;
+
+/**
+ * 「驗證 XXXXXX」：志工在網頁認領案件後，用這句把那筆認領綁到自己的 LINE
+ * 帳號，換取精確地址。代碼是 randomUUID 前 6 碼轉大寫，所以只會是 0-9A-F，
+ * 但這裡收寬一點的 [A-Z0-9]、大小寫不敏感 —— 使用者手打時打成小寫很常見，
+ * 為了大小寫就回「無效」只是在刁難人。
+ *
+ * 用 ^...$ 完全比對而不是包含比對：真實通報裡若剛好寫到「驗證」兩個字，
+ * 不該被當成綁定指令而吃掉一筆真的求助。
+ */
+const LINE_VERIFY_PATTERN = /^驗證\s+([A-Za-z0-9]{6})$/;
+
+const VERIFY_FAILED_TEXT =
+  "驗證碼無效或已過期，請確認代碼是否正確，或重新認領一次案件取得新的驗證碼。";
+
+/** 綁定成功後送出的地址訊息。 */
+function buildAddressText(
+  locationText: string | null,
+  lat: number | null,
+  lng: number | null
+): string {
+  const lines = ["驗證成功！以下是這個案件的精確位置："];
+  lines.push(`地址：${locationText ?? "（通報中未提供文字地址）"}`);
+  lines.push(
+    lat !== null && lng !== null
+      ? `座標：${lat}, ${lng}`
+      : "座標：（這筆案件尚未取得精確座標）"
+  );
+  lines.push("");
+  lines.push("請妥善保管這則訊息，不要轉傳給未認領這個案件的人。");
+  return lines.join("\n");
+}
 
 // 使用者第一次加好友（follow 事件）時的自我介紹訊息。
 const WELCOME_TEXT = `哈囉，歡迎加入「災後需求雷達」！\n\n這個機器人是用來通報淹水復原期間的生活需求，幫忙媒合志工協助。\n\n請直接用一段話描述您的狀況，包含以下資訊：\n・所在地區（例如：台南仁德）\n・年齡、是否獨居、是否行動不便\n・淹水深度\n・需要幾位志工協助\n・需要的協助類型（清淤、搬家具、飲用水、清潔用品、水電）\n・目前是否缺水缺電\n\n範例：\n「${EXAMPLE_REPORT_TEXT}」\n\n打好之後直接傳送就可以了，我們會盡快協助媒合志工。`;
@@ -479,6 +512,39 @@ async function processLineEvents(env: Env, events: LineEvent[]) {
         if (event.replyToken) {
           await replyMessage(env, event.replyToken, EXAMPLE_REPLY_TEXT);
         }
+        continue;
+      }
+
+      // 「驗證 XXXXXX」：把網頁認領綁到這個 LINE 帳號，換精確地址。
+      //
+      // 放在限流「之後」是刻意的，跟緊急/自傷那兩層相反：那兩層是求救訊息，
+      // 擋掉的代價是人命；這裡是一個純粹的查詢入口，而 6 碼短碼正是最該防
+      // 暴力嘗試的地方 —— 限流在這裡是保護，不是阻礙。
+      //
+      // 這個分支不進 AI、不進 geocode、不建案件，處理完就 continue：
+      // 一句綁定指令不是一筆災情通報，不該在 D1 留下一筆案件。
+      const verifyMatch = text.trim().match(LINE_VERIFY_PATTERN);
+      if (verifyMatch) {
+        if (!event.replyToken) {
+          console.error("Verify code message has no replyToken to answer with");
+          continue;
+        }
+        // 拿不到 userId 就沒有可以綁定的對象，當作驗證失敗處理 —— 綁定的
+        // 意義就是「這組碼屬於這個 LINE 帳號」，沒有帳號就無從綁起。
+        const bound = userId
+          ? await verifyAndBindLineCode(
+              env,
+              verifyMatch[1].toUpperCase(),
+              userId
+            )
+          : null;
+        await replyMessage(
+          env,
+          event.replyToken,
+          bound
+            ? buildAddressText(bound.location_text, bound.exact_lat, bound.exact_lng)
+            : VERIFY_FAILED_TEXT
+        );
         continue;
       }
 

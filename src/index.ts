@@ -228,10 +228,13 @@ export default {
       );
 
       // claim_token 只在這一次回應出現，之後系統只留雜湊值。
+      // line_verify_code 同樣只出現這一次 —— 它是給志工手打進 LINE 的短碼，
+      // 30 分鐘內有效，用來把這筆認領綁到自己的 LINE 帳號。
       return new Response(
         JSON.stringify({
           ...toApiCase(claimed.case),
           claim_token: claimed.claimToken,
+          line_verify_code: claimed.lineVerifyCode,
         }),
         { headers: JSON_HEADERS }
       );

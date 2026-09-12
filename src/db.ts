@@ -627,15 +627,22 @@ export async function claimCase(
   const claimToken = crypto.randomUUID();
   const claimTokenHash = await sha256Hex(claimToken);
 
+  // LINE 綁定用的一次性短碼。刻意不雜湊：這組是要讓人用手打進 LINE 的，
+  // 雜湊之後就沒辦法比對使用者輸入的原文。它的安全性來自「只有 6 碼、
+  // 30 分鐘有效、用過即失效、而且入口有限流」，不是來自不可回推 ——
+  // 這也是為什麼它跟 claimToken 是兩個獨立的東西，而不是共用一組。
+  const lineVerifyCode = crypto.randomUUID().slice(0, 6).toUpperCase();
+
   await env.DB.prepare(
-    `INSERT INTO volunteer_claims (case_id, volunteer_name, volunteer_contact, claim_token_hash)
-     VALUES (?, ?, ?, ?)`
+    `INSERT INTO volunteer_claims (case_id, volunteer_name, volunteer_contact, claim_token_hash, line_verify_code)
+     VALUES (?, ?, ?, ?, ?)`
   )
     .bind(
       caseId,
       volunteer.name ?? null,
       volunteer.contact ?? null,
-      claimTokenHash
+      claimTokenHash,
+      lineVerifyCode
     )
     .run();
 
@@ -656,7 +663,7 @@ export async function claimCase(
     await logHistory(env, caseId, "full");
   }
 
-  return { case: updated, claimToken };
+  return { case: updated, claimToken, lineVerifyCode };
 }
 
 /**
@@ -686,6 +693,58 @@ export async function verifyClaimToken(
     .bind(caseId, hash, CLAIM_TOKEN_VALID_HOURS)
     .first<{ id: number }>();
   return row !== null;
+}
+
+/** LINE 綁定驗證碼的有效時數（分鐘）。短得多是刻意的 —— 它只是「認領完，
+ *  順手去 LINE 貼一下」這段動線的長度，不是一個要用 72 小時的憑證。 */
+const LINE_VERIFY_CODE_VALID_MINUTES = 30;
+
+/**
+ * 志工在 LINE 傳「驗證 XXXXXX」時走這裡：把這組一次性短碼換成它對應的案件，
+ * 同時把 LINE userId 綁到那筆 volunteer_claims 上。
+ *
+ * 回傳 null 有四種原因，刻意全部不區分（跟 verifyClaimToken 同一套慣例）：
+ * 代碼不存在、已經被綁過、超過 30 分鐘、案件已結案。外部靠回應差異推敲不出
+ * 任何內部狀態，暴力嘗試也問不出「這組碼存不存在」。
+ */
+export async function verifyAndBindLineCode(
+  env: Env,
+  code: string,
+  lineUserId: string
+): Promise<CaseRow | null> {
+  if (!code || !lineUserId) return null;
+
+  const claim = await env.DB.prepare(
+    `SELECT id, case_id FROM volunteer_claims
+     WHERE line_verify_code = ?
+       AND verified_line_user_id IS NULL
+       AND claimed_at > datetime('now', '-' || ? || ' minutes')
+     LIMIT 1`
+  )
+    .bind(code, LINE_VERIFY_CODE_VALID_MINUTES)
+    .first<{ id: number; case_id: number }>();
+  if (!claim) return null;
+
+  // 綁定條件重寫進 WHERE 一次：上面的 SELECT 到這句 UPDATE 之間若有另一個
+  // 請求搶先綁走同一組碼，這裡會更新 0 列，不會兩個人各拿到一份地址。
+  const updateResult = await env.DB.prepare(
+    `UPDATE volunteer_claims SET verified_line_user_id = ?
+     WHERE id = ? AND verified_line_user_id IS NULL`
+  )
+    .bind(lineUserId, claim.id)
+    .run();
+  if (!updateResult.meta.changes) return null;
+
+  const caseRow = await getCase(env, claim.case_id);
+  if (!caseRow) return null;
+
+  // 已結案的案件不再送出地址。closed（被判定重複而合併）與 completed
+  // （志工已回報完成）都算 —— 這跟 verifyClaimToken 是同一條線，否則
+  // 「回報完成會讓 token 立即失效」的承諾會被這條新路徑繞過去。
+  // 注意代碼已經在上面被綁掉了：寧可讓它作廢，也不要留著可以再試一次。
+  if (caseRow.status === "closed" || caseRow.status === "completed") return null;
+
+  return caseRow;
 }
 
 async function sha256Hex(input: string): Promise<string> {

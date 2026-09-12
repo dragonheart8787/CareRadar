@@ -61,6 +61,8 @@ CREATE TABLE IF NOT EXISTS volunteer_claims (
   volunteer_name      TEXT,
   volunteer_contact   TEXT,
   claim_token_hash    TEXT,                                  -- SHA-256(claim token)；原始 token 只在認領當下回傳一次
+  line_verify_code    TEXT,                                  -- 一次性 6 碼綁定驗證碼，30 分鐘有效；短碼、非長期憑證，所以不雜湊
+  verified_line_user_id TEXT,                                -- 綁定成功的 LINE userId；非 NULL 代表這組驗證碼已用掉
   claimed_at          TEXT NOT NULL DEFAULT (datetime('now')),
   FOREIGN KEY (case_id) REFERENCES cases(id)
 );

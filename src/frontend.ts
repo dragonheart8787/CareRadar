@@ -66,6 +66,16 @@ export function renderHtml(): string {
   .tag.ok{ color:var(--teal); border-color:var(--teal); }
   /* 通行阻礙：跟「待人工複核」面板同一組琥珀色，但刻意用另一種形狀 ——
      那邊是填滿背景的整塊面板，這裡只用一條左邊界，避免兩者在畫面上糊成一團。 */
+  /* 認領成功後的一次性 LINE 綁定提示。用中性的面板色而不是琥珀色 ——
+     它是「你還可以這樣做」的邀請，不是警示，不該跟通行阻礙搶注意力。 */
+  .line-bind{
+    margin:8px 0 0; padding:8px 10px; border:1px dashed var(--line);
+    border-radius:8px; font-size:11.5px; line-height:1.6; color:var(--ink-dim);
+  }
+  .line-bind code{
+    font-family:"IBM Plex Mono", monospace; font-size:13px; font-weight:600;
+    color:var(--teal); letter-spacing:1px;
+  }
   .access-obstacle{
     font-size:11.5px; line-height:1.45; color:var(--amber);
     border-left:2px solid var(--amber); padding:1px 0 1px 8px; margin:0 0 8px;
@@ -237,6 +247,7 @@ function renderList(cases){
         <div class="bar-r" style="width:\${(b.resource_gap_contribution/totalForBar)*100}%"></div>
       </div>
       <div class="score-breakdown-text">脆弱程度 +\${b.vulnerability_contribution.toFixed(1)} · 災害程度 +\${b.severity_contribution.toFixed(1)} · 等待時間 +\${b.urgency_contribution.toFixed(1)} · 人力缺口 +\${b.resource_gap_contribution.toFixed(1)}</div>
+      \${pendingLineCodes[c.id] ? '<div class="line-bind">想直接用 LINE 收到精確地址？加 LINE 好友後傳「驗證 <code>' + escapeHtml(pendingLineCodes[c.id]) + '</code>」給我們，30 分鐘內有效。</div>' : ''}
       <div class="claim-row">
         <span class="slots">志工 \${c.volunteers_assigned}/\${c.volunteers_needed}</span>
         \${isCompleted ? '' : '<input type="text" placeholder="你的稱呼（選填）" id="name-' + c.id + '"' + (isFull ? ' disabled' : '') + '/><button data-id="' + c.id + '"' + (isFull ? ' disabled' : '') + '>我要認領</button>'}
@@ -345,9 +356,15 @@ async function claimCase(id){
     // claim_token 只會在這一次回應裡出現，錯過就換不回精確地址了。
     const data = await res.json();
     if (data.claim_token) writeClaimToken(id, data.claim_token);
+    // 驗證碼刻意不存 localStorage：它 30 分鐘就過期，存下來只會讓使用者
+    // 隔天看到一組早就無效的碼。顯示這一次，重新整理就消失。
+    if (data.line_verify_code) pendingLineCodes[id] = data.line_verify_code;
   }
   refresh();
 }
+
+// caseId -> 這次認領拿到的驗證碼。只活在記憶體裡，重新整理頁面就沒了。
+const pendingLineCodes = {};
 
 function readClaimToken(id){
   try { return localStorage.getItem('claim_token_' + id); } catch { return null; }

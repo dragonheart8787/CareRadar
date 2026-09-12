@@ -71,6 +71,10 @@ export interface CaseRow {
 export interface ClaimResult {
   case: CaseRow;
   claimToken: string;
+  // 一次性的 6 碼驗證碼，讓志工用 LINE 傳「驗證 XXXXXX」把這筆認領綁到自己的
+  // LINE 帳號，之後精確地址就能直接推播過去。跟 claimToken 是兩條平行的路徑：
+  // claimToken 走網頁，這組走 LINE，互不取代。
+  lineVerifyCode: string;
 }
 
 export interface CareScoreBreakdown {
