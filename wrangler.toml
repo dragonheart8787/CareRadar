@@ -34,6 +34,8 @@ database_id = "83feebfb-668f-48c3-9e1c-cd71df0c62c1"
 # 測試用的「重置我的測試案件」暗號開關。預設 "false"：正式部署一律關閉，
 # 要測試時再去 Dashboard 的 Variables and Secrets 設一個 "true" 覆蓋過去
 # （Dashboard 的值優先於這裡的預設值，兩邊可以並存）。
+# ⚠️ 目前為測試期間暫時設為true，Demo或正式展示前必須改回false，否則任何人
+# 都能傳暗號關閉別人名下的案件。
 ENABLE_DEBUG_RESET = "true"
 
 # Rate limiting bindings（Workers 原生 API，不是 Dashboard 的 WAF 規則）。
