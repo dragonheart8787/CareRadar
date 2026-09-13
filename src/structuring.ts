@@ -101,6 +101,11 @@ const SYSTEM_PROMPT = `/no_think
 - 只填寫文字中「明確提到或能直接推論」的欄位，不要用一般常識腦補沒提到的資訊。
 - 不確定的欄位一律填 null，不要猜測數字（例如沒提到年齡就填 null，不要填一個「看起來合理」的數字）。
 - no_water / no_electricity 沒提到就是 false，這兩個欄位不能是 null。
+- lives_alone / mobility_impaired / has_young_children 這三個欄位，規則跟上面那兩個
+  **相反**：只有在文字裡明確提到相關狀態時才填 true 或 false，完全沒有提到的話一律
+  填 null，不要因為沒提到就自動判斷為 false。「沒說」跟「說了不是」是兩件不同的事：
+  使用者只說「我需要幫忙」而完全沒有提到自己是否獨居，lives_alone 必須是 null，
+  不能猜測填 false；要等到他說了「我一個人住」或「家裡還有別人」才填得出值。
 - need_types 只能從給定的 enum 選，請依照下面的對照表判斷，只有在真的都不符合時才用 "other"：
     debris_removal           → 例如：清淤、清理污泥、鏟土
     furniture_moving         → 例如：搬家具、搬運家具、抬桌椅、搬冰箱
