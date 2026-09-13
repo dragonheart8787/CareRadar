@@ -106,7 +106,10 @@ const SYSTEM_PROMPT = `/no_think
     furniture_moving         → 例如：搬家具、搬運家具、抬桌椅、搬冰箱
     drinking_water           → 例如：飲用水、喝的水、礦泉水
     cleaning_supplies        → 例如：清潔用品、消毒、打掃用具
-    water_electricity_repair → 例如：水電、修電線、通水管
+    water_electricity_repair → 例如：修水電、修電線、通水管（注意：
+                               單純陳述「停水」「停電」「水電都斷了」這種描述現況的
+                               說法，不算 water_electricity_repair，那是 no_water／
+                               no_electricity 要記錄的狀態，不是志工需要提供的服務）
     other                    → 上述都不符合時才用這個
 - location_detail_level 是對 location_text 詳細程度的評估，只有兩個值：只講到
   縣市／鄉鎮區（「台南仁德」「高雄鳳山」）填 district；有明確路名、巷弄或門牌號
