@@ -174,6 +174,28 @@ export function rejectHallucinatedLocation(
   return null;
 }
 
+/**
+ * 把剛被判定為幻覺的地名，從 AI 自己另外生成的 summary 裡拿掉。
+ *
+ * 為什麼需要：summary 跟 location_text 是模型在同一次輸出裡各自生成的兩段文字，
+ * rejectHallucinatedLocation 擋掉前者不會連帶影響後者 —— 實測就出現過
+ * location_text 被擋成 null、summary 仍寫著「台南仁德一戶需協助」的案例。
+ * 這不會把志工導向錯地點（案件根本沒有座標），但 summary 會出現在公開的
+ * /api/cases 回應與卡片上，等於在畫面上留一個已經被系統判定站不住腳的地址。
+ *
+ * 刻意只做最笨的整段刪除，不補字、不重寫句子：改寫 summary 需要再問模型一次，
+ * 而這裡的前提正是「模型這次的輸出不可信」。刪完變成「一戶需協助」這種略顯
+ * 突兀的短句是可以接受的降級 —— 讀起來怪，好過讀起來合理但地址是假的。
+ */
+export function stripRejectedLocationFromSummary(
+  summary: string,
+  rejectedLocationName: string | null
+): string {
+  if (!rejectedLocationName) return summary;
+  // split/join 而不是 replace：同一個地名在 summary 裡出現不只一次時要全部拿掉。
+  return summary.split(rejectedLocationName).join("");
+}
+
 export async function extractFields(
   env: Env,
   rawText: string
@@ -210,10 +232,20 @@ export async function extractFields(
       ? parsed.location_text
       : null;
 
+  const acceptedLocationText = rejectHallucinatedLocation(normalizedLocationText, rawText);
+
+  // 只有「模型原本給了地址、而且那個地址被判定為幻覺」時才需要清 summary。
+  // 模型一開始就沒給地址（normalizedLocationText 是 null）不在此列 —— 那不是
+  // 幻覺，沒有任何字串需要比對。
+  const rejectedLocationName =
+    normalizedLocationText !== null && acceptedLocationText === null
+      ? normalizedLocationText.trim()
+      : null;
+
   // 防禦性正規化：就算 schema 沒被完美遵守，也不要讓整個流程炸掉。
   // 寧可保守地把可疑欄位歸零，也不要讓一個解析錯誤變成一個隱形的 500。
   return {
-    location_text: rejectHallucinatedLocation(normalizedLocationText, rawText),
+    location_text: acceptedLocationText,
     // 0 歲（嬰兒）是合法值；130 是留了餘裕的人類壽命上限。
     age: normalizeBoundedInt(parsed.age, 0, 130),
     lives_alone: typeof parsed.lives_alone === "boolean" ? parsed.lives_alone : null,
@@ -246,7 +278,7 @@ export async function extractFields(
     // 沒有資訊量的固定字串，也不要把原始輸入洩漏到公開端點。
     summary:
       typeof parsed.summary === "string"
-        ? parsed.summary
+        ? stripRejectedLocationFromSummary(parsed.summary, rejectedLocationName)
         : "災後需求通報（摘要產生失敗，請由後台人工複核原始內容）",
     // 不確定就當作沒有：預設 true 會讓每一則通報都掛上緊急提醒，
     // 警告一旦變成雜訊，真正緊急的那則就沒人看了。
