@@ -138,6 +138,42 @@ const SYSTEM_PROMPT = `/no_think
   emotional_distress_signal 問的是「這個人的心情狀態」。一個人可以情緒很崩潰但人身
   安全無虞，也可以受困待救卻語氣平靜地陳述事實。`;
 
+/**
+ * 幻覺地址守門員：模型給的 location_text 如果一個字都沒出現在使用者原話裡，
+ * 就當成幻覺丟掉。
+ *
+ * 為什麼需要這道檢查：實測出現過使用者從頭到尾沒提任何地點、模型卻自己填出
+ * 一個地名的案例（推測是被系統自己的範例訊息反覆餵同一個地名污染）。這個欄位
+ * 跟其他欄位不同 —— 它會被拿去打 geocode()，換回一組座標寫進 D1、畫在地圖上，
+ * 於是一個憑空生出的地名會把志工導向一個跟通報者毫無關係的地址。這是所有
+ * 抽取錯誤裡後果最重的一種，不能只靠 prompt 約束。
+ *
+ * 判斷標準刻意從嚴，用最笨的逐字 substring 比對，不分詞、不做模糊比對、不正規化
+ * 大小寫：模型「整理」過的地址（「台南市仁德區」← 原話只寫「仁德」）也會被擋掉。
+ * 誤殺的代價只是少一組座標、多問使用者一句地址；放過的代價是志工白跑一趟，
+ * 兩邊不對稱。寧可錯殺。
+ *
+ * console.warn 是刻意留的：Workers Logs 裡數得出這道防護實際被觸發的頻率，
+ * 之後才有依據判斷標準要不要放寬。
+ */
+export function rejectHallucinatedLocation(
+  locationText: string | null,
+  rawText: string
+): string | null {
+  if (locationText === null) return null;
+
+  // 比照上面那段 trim 的取捨：用 trim 後的結果做判斷，回傳的仍是模型原本的
+  // 字串。模型在地址前後多打一個空白不是幻覺，不該被當成幻覺處理。
+  const candidate = locationText.trim();
+  if (!candidate) return null;
+  if (rawText.includes(candidate)) return locationText;
+
+  console.warn(
+    "Rejected hallucinated location_text (not found in raw input): " + locationText
+  );
+  return null;
+}
+
 export async function extractFields(
   env: Env,
   rawText: string
@@ -165,17 +201,19 @@ export async function extractFields(
 
   const parsed = JSON.parse(content) as Partial<ExtractedFields>;
 
+  // 空白字串當成沒填。geocode() 本來就用 `if (!locationText)` 把 "" 視為
+  // 沒有地址，但 confidence/追問那一側只看 !== null —— 於是一個空字串
+  // 會讓案件永遠拿不到座標、又永遠不會被追問地址。這裡在源頭統一標準。
+  // 只用 trim 的結果判斷空不空，實際存下去的仍是模型原本給的字串。
+  const normalizedLocationText =
+    typeof parsed.location_text === "string" && parsed.location_text.trim()
+      ? parsed.location_text
+      : null;
+
   // 防禦性正規化：就算 schema 沒被完美遵守，也不要讓整個流程炸掉。
   // 寧可保守地把可疑欄位歸零，也不要讓一個解析錯誤變成一個隱形的 500。
   return {
-    // 空白字串當成沒填。geocode() 本來就用 `if (!locationText)` 把 "" 視為
-    // 沒有地址，但 confidence/追問那一側只看 !== null —— 於是一個空字串
-    // 會讓案件永遠拿不到座標、又永遠不會被追問地址。這裡在源頭統一標準。
-    // 只用 trim 的結果判斷空不空，實際存下去的仍是模型原本給的字串。
-    location_text:
-      typeof parsed.location_text === "string" && parsed.location_text.trim()
-        ? parsed.location_text
-        : null,
+    location_text: rejectHallucinatedLocation(normalizedLocationText, rawText),
     // 0 歲（嬰兒）是合法值；130 是留了餘裕的人類壽命上限。
     age: normalizeBoundedInt(parsed.age, 0, 130),
     lives_alone: typeof parsed.lives_alone === "boolean" ? parsed.lives_alone : null,
