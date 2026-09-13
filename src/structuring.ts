@@ -175,6 +175,17 @@ export function rejectHallucinatedLocation(
 }
 
 /**
+ * summary 的降級文字。兩個地方會用到 —— AI 整體抽取失敗時，以及清掉幻覺地名
+ * 之後 summary 什麼都不剩時 —— 所以寫成一份常數，不要各留一個字面值，免得
+ * 以後改了其中一處、另一處還留著舊句子。
+ *
+ * 抽取失敗時**不能**拿 rawText 當 fallback —— summary 會出現在公開的
+ * /api/cases 回應裡，而使用者原話開頭通常就是完整地址。寧可顯示一句
+ * 沒有資訊量的固定字串，也不要把原始輸入洩漏到公開端點。
+ */
+const SUMMARY_FALLBACK_TEXT = "災後需求通報（摘要產生失敗，請由後台人工複核原始內容）";
+
+/**
  * 把剛被判定為幻覺的地名，從 AI 自己另外生成的 summary 裡拿掉。
  *
  * 為什麼需要：summary 跟 location_text 是模型在同一次輸出裡各自生成的兩段文字，
@@ -242,6 +253,17 @@ export async function extractFields(
       ? normalizedLocationText.trim()
       : null;
 
+  // 清掉幻覺地名之後有可能什麼都不剩（模型的 summary 本身幾乎就只有那個地名）。
+  // 一個空白摘要在卡片上看起來像系統壞了，而不是「這裡沒有可靠的摘要」——
+  // 退回跟 AI 整體失敗時同一句降級文字，維持「誠實告知、不留空白」的一貫做法。
+  const strippedSummary =
+    typeof parsed.summary === "string"
+      ? stripRejectedLocationFromSummary(parsed.summary, rejectedLocationName)
+      : "";
+  const normalizedSummary = strippedSummary.trim()
+    ? strippedSummary
+    : SUMMARY_FALLBACK_TEXT;
+
   // 防禦性正規化：就算 schema 沒被完美遵守，也不要讓整個流程炸掉。
   // 寧可保守地把可疑欄位歸零，也不要讓一個解析錯誤變成一個隱形的 500。
   return {
@@ -273,13 +295,7 @@ export async function extractFields(
       parsed.location_detail_level === "street" ? "street" : "district",
     // min 設 1：0 與負數會變成 null，交給 insertCase 既有的 `?? 1` 補上預設值。
     volunteers_needed: normalizeBoundedInt(parsed.volunteers_needed, 1, Infinity),
-    // 抽取失敗時**不能**拿 rawText 當 fallback —— summary 會出現在公開的
-    // /api/cases 回應裡，而使用者原話開頭通常就是完整地址。寧可顯示一句
-    // 沒有資訊量的固定字串，也不要把原始輸入洩漏到公開端點。
-    summary:
-      typeof parsed.summary === "string"
-        ? stripRejectedLocationFromSummary(parsed.summary, rejectedLocationName)
-        : "災後需求通報（摘要產生失敗，請由後台人工複核原始內容）",
+    summary: normalizedSummary,
     // 不確定就當作沒有：預設 true 會讓每一則通報都掛上緊急提醒，
     // 警告一旦變成雜訊，真正緊急的那則就沒人看了。
     emergency_signal: parsed.emergency_signal === true,
