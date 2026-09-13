@@ -34,7 +34,7 @@ database_id = "83feebfb-668f-48c3-9e1c-cd71df0c62c1"
 # 測試用的「重置我的測試案件」暗號開關。預設 "false"：正式部署一律關閉，
 # 要測試時再去 Dashboard 的 Variables and Secrets 設一個 "true" 覆蓋過去
 # （Dashboard 的值優先於這裡的預設值，兩邊可以並存）。
-ENABLE_DEBUG_RESET = "false"
+ENABLE_DEBUG_RESET = "true"
 
 # Rate limiting bindings（Workers 原生 API，不是 Dashboard 的 WAF 規則）。
 # namespace_id 是帳號內用來識別這個計數器的任意正整數字串，不需要事先建立資源。
