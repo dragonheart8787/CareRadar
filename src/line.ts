@@ -243,6 +243,21 @@ const ADDRESS_DETAIL_HINT =
   "\n\n如果方便的話，麻煩補充更詳細的地址（例如路名、巷弄、門牌號），或直接用LINE的「分享位置」功能，這樣能大幅提升志工找到您的準確度。";
 
 /**
+ * 案件到最後仍然完全沒有地址時，附在回覆「最後面」的提醒。
+ *
+ * 跟 ADDRESS_DETAIL_HINT 是同一個位置、互斥的兩種情境：那句是「有地址但太粗略」，
+ * 這句是「根本沒有地址」。
+ *
+ * 為什麼不能只靠 needs_human_verification 的追問：那個旗標是六個關鍵欄位的平均
+ * 信心分數，而 volunteers_needed 永遠算已填 —— 使用者只要補齊其他兩三個欄位就
+ * 可能跨過 0.5 門檻，於是系統改送確認訊息，從此再也不會主動提起地址。對一個
+ * 以地圖與座標為核心的系統來說，沒有地址的案件等於志工不知道要去哪，其他欄位
+ * 再完整都補不回來 —— 所以地址這一項要獨立於信心分數之外持續提醒。
+ */
+const MISSING_ADDRESS_HINT =
+  "\n\n我們目前還不知道您的所在地區，麻煩補充所在地區（例如：台南仁德），或直接用LINE的「分享位置」功能，這樣志工才能找到您。";
+
+/**
  * 「我想看範例」的暗號文字。按鈕與 Rich Menu 都送這一句，
  * processLineEvents 認出來之後只回範例說明 —— 不進 AI 抽取、不寫 D1。
  *
@@ -674,11 +689,14 @@ async function processLineEvents(env: Env, events: LineEvent[]) {
           replyText = EMERGENCY_REDIRECT_TEXT + "\n\n" + replyText;
         }
 
-        // 只講到鄉鎮區 → 在最後面附上「補個門牌會更好」的建議。
+        // 在最後面附上一句關於地址的建議，依案件目前的地址狀態二選一：
+        // 完全沒有地址 → 請他補所在地區或分享位置；只講到鄉鎮區 → 建議補門牌。
         //
-        // location_text 是 null 時刻意不加：那種情況缺漏清單裡本來就有
-        // 「所在地區」，追問訊息已經在問了，再補一句講門牌只會自相矛盾 ——
-        // 而且對一個連地區都沒提的人講「補路名巷弄」也搭不上。
+        // 完全沒有地址時不用 ADDRESS_DETAIL_HINT：對一個連地區都沒提的人講
+        // 「補路名巷弄」搭不上。反過來也不行 —— 以前這裡在 location_text 是
+        // null 時什麼都不加，理由是「追問訊息已經在問所在地區了」，但那個前提
+        // 只在 needs_human_verification 仍為 1 時成立；信心分數一跨過門檻就改
+        // 送確認訊息，地址從此無人再提。所以改成不管有沒有追問都提醒。
         //
         // 這裡不需要另外排除 GPS 分享：那條路徑走的是 processLocationEvent，
         // 早在上面就 continue 了，根本走不到這一段。
@@ -689,13 +707,21 @@ async function processLineEvents(env: Env, events: LineEvent[]) {
         // 兩層訊號一視同仁 —— 關鍵字比對（emergencyKeywordHit）與 AI 語意判斷
         // （emergency_signal）任一為真都算。對正在求救的人來說，「系統是怎麼
         // 判斷出我很緊急的」毫無意義，會不會被追問地址細節才是他感受得到的事。
-        if (
-          !emergencyKeywordHit &&
-          !fields.emergency_signal &&
-          fields.location_text !== null &&
-          fields.location_detail_level === "district"
-        ) {
-          replyText = replyText + ADDRESS_DETAIL_HINT;
+        //
+        // 兩句地址提示寫成 if / else if 而不是兩個獨立的 if：它們是同一件事的
+        // 兩種程度（完全沒地址／有地址但太粗略），同一則回覆裡出現兩句講地址
+        // 的話會互相打架。用結構保證互斥，比靠條件彼此剛好不重疊可靠。
+        if (!emergencyKeywordHit && !fields.emergency_signal) {
+          // 看的是合併後的 caseRow 而不是這次抽取的 fields：多輪追問時地址可能
+          // 是前幾則訊息給的，這次這則沒提不代表案件沒有地址。
+          if (caseRow.location_text === null) {
+            replyText = replyText + MISSING_ADDRESS_HINT;
+          } else if (
+            fields.location_text !== null &&
+            fields.location_detail_level === "district"
+          ) {
+            replyText = replyText + ADDRESS_DETAIL_HINT;
+          }
         }
 
         // 資訊不足才帶快速回覆按鈕；補齊了就只回確認訊息。
