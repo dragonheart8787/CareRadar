@@ -65,3 +65,25 @@ p = 1 的政策無效認領為 0（並以 p = 0.5 的 `latest` 作正向對照�
 - 所有行為參數都是假設（見預註冊第 8 節）。特別是：志工「只做一次認領」且認領到額滿案件就浪費掉，
   加上基準政策的 `fill_visibility` 預設 0.5，會讓使用同一個排序的基準（`nearest`、不導流的
   Care Score）產生大量無效認領。`RESULTS.md` 的 H1 與 H6 有把這一點拆開來呈現。
+
+## 探索性敏感度分析：志工遇到額滿案件時重挑（事後加入）
+
+看過正式結果之後才加的、**不是預註冊假設的檢定**的分析；原因、設定與規則記錄在
+[`PREREGISTRATION.md`](./PREREGISTRATION.md) 結尾 Deviations 的最後一節（該節的 commit 先於實作）。
+結果在 [`SENSITIVITY_RETRY.md`](./SENSITIVITY_RETRY.md) 與 `results/sensitivity_retry.csv`；
+不覆蓋 `RESULTS.md`、`results/summary.csv`、`results/paired_diffs.csv`。
+
+```bash
+npm run sim:retry                                # 先跑全部檢查與回歸，全過才產生結果（單執行緒約 10 分鐘；實測 625 秒）
+npm run sim:retry -- --reps 6 --out /tmp/retry   # 小規模試跑；輸出到別處，不會動 repo 內的檔案
+```
+
+- `retry.ts`：重挑版引擎（事件佇列）。**刻意與 `engine.ts` 並存而不是修改它**，所以正式實驗的程式碼
+  與結果不受影響；兩者的等價性由「`retry_max = 0` 逐位元相同」保證——單戶層級（11 情境 × 9 政策 × 4 種子）
+  與已 commit 的 `results/summary.csv`（4 情境 × 9 政策 × 11 指標）兩種層級的回歸檢查。
+- `checks_retry.ts`：新檢查（等價性、志工守恆與時間、p = 1 政策與 `retry_max` 無關、`retry_delay` = 1e6
+  時 T 內結果與 `retry_max = 0` 相同、手工小世界的排除／延遲／交錯／作廢、無效認領比例單調不增）。
+- 新檢查做過 6 種突變測試，每一種都被抓到：重挑時不排除已撞到的案件、重挑沒有加上延遲、只排除最近一次撞到的案件、
+  事件堆的排序顛倒、重挑時沒有可選案件卻算成「找不到案件」、成功認領的抵達時間從第一次嘗試起算。
+- `retry_report.ts`、`retry_main.ts`：報告、CSV 與入口。
+

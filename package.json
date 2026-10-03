@@ -8,6 +8,7 @@
     "deploy": "wrangler deploy",
     "typecheck": "tsc --noEmit",
     "sim": "esbuild sim/main.ts --bundle --platform=node --format=esm --outfile=sim/.build/main.mjs --log-level=warning && node sim/.build/main.mjs",
+    "sim:retry": "esbuild sim/retry_main.ts --bundle --platform=node --format=esm --outfile=sim/.build/retry_main.mjs --log-level=warning && node sim/.build/retry_main.mjs",
     "test": "node --experimental-strip-types --test src/*.test.ts",
     "db:schema:local": "wrangler d1 execute disaster-care-radar-db --local --file=./schema.sql",
     "db:schema:remote": "wrangler d1 execute disaster-care-radar-db --remote --file=./schema.sql",
