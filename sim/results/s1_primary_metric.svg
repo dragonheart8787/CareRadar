@@ -1,0 +1,71 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 436" width="900" height="436" font-family="system-ui, -apple-system, 'Noto Sans TC', 'Microsoft JhengHei', sans-serif">
+<rect width="900" height="436" fill="#ffffff"/>
+<text x="20" y="28" font-size="17" font-weight="600" fill="#1a1a1a">S1 主要情境：弱勢家戶「通報到第一位志工抵達」的等待時間中位數</text>
+<text x="20" y="49" font-size="12" fill="#555">單位：小時，越低越好；未被服務者以 T − 通報時間 計；誤差線 = 95% percentile bootstrap CI（300 次重複）</text>
+<text x="20" y="66" font-size="12" fill="#555">模擬假設下的機制展示，不是現實世界有效性的證明</text>
+<line x1="230" y1="72" x2="230" y2="384" stroke="#e3e5e8"/>
+<text x="230" y="400" font-size="11" fill="#666" text-anchor="middle">0</text>
+<line x1="367.1760179932667" y1="72" x2="367.1760179932667" y2="384" stroke="#e3e5e8"/>
+<text x="367.1760179932667" y="400" font-size="11" fill="#666" text-anchor="middle">20</text>
+<line x1="504.35203598653345" y1="72" x2="504.35203598653345" y2="384" stroke="#e3e5e8"/>
+<text x="504.35203598653345" y="400" font-size="11" fill="#666" text-anchor="middle">40</text>
+<line x1="641.5280539798002" y1="72" x2="641.5280539798002" y2="384" stroke="#e3e5e8"/>
+<text x="641.5280539798002" y="400" font-size="11" fill="#666" text-anchor="middle">60</text>
+<text x="220" y="99" font-size="12.5" fill="#222" text-anchor="end">latest</text>
+<rect x="230" y="85" width="368.50455723998857" height="18" fill="#8a8f98" opacity="0.85"/>
+<line x1="582.9146923969604" y1="95" x2="613.4029741462944" y2="95" stroke="#111" stroke-width="1.5"/>
+<line x1="582.9146923969604" y1="88" x2="582.9146923969604" y2="102" stroke="#111" stroke-width="1.5"/>
+<line x1="613.4029741462944" y1="88" x2="613.4029741462944" y2="102" stroke="#111" stroke-width="1.5"/>
+<text x="722" y="99" font-size="12" fill="#222">53.73 [51.45, 55.90]</text>
+<text x="220" y="133" font-size="12.5" fill="#222" text-anchor="end">nearest</text>
+<rect x="230" y="119" width="443.3935039177927" height="18" fill="#8a8f98" opacity="0.85"/>
+<line x1="672.3042146137341" y1="129" x2="674.4444444444445" y2="129" stroke="#111" stroke-width="1.5"/>
+<line x1="672.3042146137341" y1="122" x2="672.3042146137341" y2="136" stroke="#111" stroke-width="1.5"/>
+<line x1="674.4444444444445" y1="122" x2="674.4444444444445" y2="136" stroke="#111" stroke-width="1.5"/>
+<text x="722" y="133" font-size="12" fill="#222">64.65 [64.49, 64.80]</text>
+<text x="220" y="167" font-size="12.5" fill="#222" text-anchor="end">attention</text>
+<rect x="230" y="153" width="308.48886309209547" height="18" fill="#8a8f98" opacity="0.85"/>
+<line x1="529.9993544670372" y1="163" x2="547.623331589348" y2="163" stroke="#111" stroke-width="1.5"/>
+<line x1="529.9993544670372" y1="156" x2="529.9993544670372" y2="170" stroke="#111" stroke-width="1.5"/>
+<line x1="547.623331589348" y1="156" x2="547.623331589348" y2="170" stroke="#111" stroke-width="1.5"/>
+<text x="722" y="167" font-size="12" fill="#222">44.98 [43.74, 46.31]</text>
+<text x="220" y="201" font-size="12.5" fill="#222" text-anchor="end">random</text>
+<rect x="230" y="187" width="92.49593736509576" height="18" fill="#8a8f98" opacity="0.85"/>
+<line x1="320.3599545618424" y1="197" x2="324.7053494588017" y2="197" stroke="#111" stroke-width="1.5"/>
+<line x1="320.3599545618424" y1="190" x2="320.3599545618424" y2="204" stroke="#111" stroke-width="1.5"/>
+<line x1="324.7053494588017" y1="190" x2="324.7053494588017" y2="204" stroke="#111" stroke-width="1.5"/>
+<text x="722" y="201" font-size="12" fill="#222">13.49 [13.17, 13.81]</text>
+<text x="220" y="235" font-size="12.5" fill="#222" text-anchor="end" font-weight="700">care_score</text>
+<rect x="230" y="221" width="65.00106312466454" height="18" fill="#1b6ef3" opacity="0.85"/>
+<line x1="293.22728892401136" y1="231" x2="296.80268890121755" y2="231" stroke="#111" stroke-width="1.5"/>
+<line x1="293.22728892401136" y1="224" x2="293.22728892401136" y2="238" stroke="#111" stroke-width="1.5"/>
+<line x1="296.80268890121755" y1="224" x2="296.80268890121755" y2="238" stroke="#111" stroke-width="1.5"/>
+<text x="722" y="235" font-size="12" fill="#222">9.48 [9.22, 9.74]</text>
+<text x="220" y="269" font-size="12.5" fill="#222" text-anchor="end">coordinated_latest</text>
+<rect x="230" y="255" width="70.70924847855053" height="18" fill="#7fb0f5" opacity="0.85"/>
+<line x1="293.60133996092515" y1="265" x2="307.6826304997759" y2="265" stroke="#111" stroke-width="1.5"/>
+<line x1="293.60133996092515" y1="258" x2="293.60133996092515" y2="272" stroke="#111" stroke-width="1.5"/>
+<line x1="307.6826304997759" y1="258" x2="307.6826304997759" y2="272" stroke="#111" stroke-width="1.5"/>
+<text x="722" y="269" font-size="12" fill="#222">10.31 [9.27, 11.33]</text>
+<text x="220" y="303" font-size="12.5" fill="#222" text-anchor="end">coordinated_nearest</text>
+<rect x="230" y="289" width="186.8270215193627" height="18" fill="#7fb0f5" opacity="0.85"/>
+<line x1="411.2457130724689" y1="299" x2="422.562803721584" y2="299" stroke="#111" stroke-width="1.5"/>
+<line x1="411.2457130724689" y1="292" x2="411.2457130724689" y2="306" stroke="#111" stroke-width="1.5"/>
+<line x1="422.562803721584" y1="292" x2="422.562803721584" y2="306" stroke="#111" stroke-width="1.5"/>
+<text x="722" y="303" font-size="12" fill="#222">27.24 [26.43, 28.08]</text>
+<text x="220" y="337" font-size="12.5" fill="#222" text-anchor="end">care_score_uncoordinated</text>
+<rect x="230" y="323" width="431.06400629626637" height="18" fill="#7fb0f5" opacity="0.85"/>
+<line x1="659.7366928801239" y1="333" x2="662.3426699457411" y2="333" stroke="#111" stroke-width="1.5"/>
+<line x1="659.7366928801239" y1="326" x2="659.7366928801239" y2="340" stroke="#111" stroke-width="1.5"/>
+<line x1="662.3426699457411" y1="326" x2="662.3426699457411" y2="340" stroke="#111" stroke-width="1.5"/>
+<text x="722" y="337" font-size="12" fill="#222">62.85 [62.65, 63.03]</text>
+<text x="220" y="371" font-size="12.5" fill="#222" text-anchor="end">care_score_full_compliance</text>
+<rect x="230" y="357" width="52.8061970564861" height="18" fill="#7fb0f5" opacity="0.85"/>
+<line x1="281.25900609904835" y1="367" x2="284.39103812047824" y2="367" stroke="#111" stroke-width="1.5"/>
+<line x1="281.25900609904835" y1="360" x2="281.25900609904835" y2="374" stroke="#111" stroke-width="1.5"/>
+<line x1="284.39103812047824" y1="360" x2="284.39103812047824" y2="374" stroke="#111" stroke-width="1.5"/>
+<text x="722" y="371" font-size="12" fill="#222">7.70 [7.47, 7.93]</text>
+<rect x="20" y="413" width="10" height="10" fill="#8a8f98"/><text x="35" y="422" font-size="11.5" fill="#444">基準（p = 0.5）</text>
+<rect x="150" y="413" width="10" height="10" fill="#1b6ef3"/><text x="165" y="422" font-size="11.5" fill="#444">care_score（CareRadar）</text>
+<rect x="320" y="413" width="10" height="10" fill="#7fb0f5"/><text x="335" y="422" font-size="11.5" fill="#444">消融組</text>
+</svg>

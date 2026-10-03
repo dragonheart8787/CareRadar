@@ -1,0 +1,84 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 482" width="900" height="482" font-family="system-ui, -apple-system, 'Noto Sans TC', 'Microsoft JhengHei', sans-serif">
+<rect width="900" height="482" fill="#ffffff"/>
+<text x="20" y="28" font-size="17" font-weight="600" fill="#1a1a1a">各情境：care_score 相對 latest 的配對差（弱勢等待時間中位數）</text>
+<text x="20" y="49" font-size="12" fill="#555">單位：小時；負值 = care_score 較快，正值 = latest 較快；點 = 平均差，線 = 95% percentile bootstrap CI</text>
+<text x="20" y="66" font-size="12" fill="#555">CI 跨過 0（虛線）的情境，在這組假設下看不出差異；模擬假設下的機制展示，不是現實世界有效性的證明</text>
+<line x1="264.09614873523356" y1="72" x2="264.09614873523356" y2="430" stroke="#e3e5e8"/>
+<text x="264.09614873523356" y="446" font-size="11" fill="#666" text-anchor="middle">-60</text>
+<line x1="410.29413275646846" y1="72" x2="410.29413275646846" y2="430" stroke="#e3e5e8"/>
+<text x="410.29413275646846" y="446" font-size="11" fill="#666" text-anchor="middle">-40</text>
+<line x1="556.4921167777034" y1="72" x2="556.4921167777034" y2="430" stroke="#e3e5e8"/>
+<text x="556.4921167777034" y="446" font-size="11" fill="#666" text-anchor="middle">-20</text>
+<line x1="702.6901007989383" y1="72" x2="702.6901007989383" y2="430" stroke="#e3e5e8"/>
+<text x="702.6901007989383" y="446" font-size="11" fill="#666" text-anchor="middle">0</text>
+<line x1="702.6901007989383" y1="72" x2="702.6901007989383" y2="430" stroke="#333" stroke-dasharray="4 3"/>
+<text x="240" y="98" font-size="12.5" fill="#222" text-anchor="end">S1 主要</text>
+<line x1="363.47070372240194" y1="94" x2="395.4522523447256" y2="94" stroke="#1b6ef3" stroke-width="2"/>
+<line x1="363.47070372240194" y1="87" x2="363.47070372240194" y2="101" stroke="#1b6ef3" stroke-width="2"/>
+<line x1="395.4522523447256" y1="87" x2="395.4522523447256" y2="101" stroke="#1b6ef3" stroke-width="2"/>
+<circle cx="379.2254046212213" cy="94" r="4.5" fill="#1b6ef3"/>
+<text x="722" y="98" font-size="12" fill="#222">-44.25 [-46.41, -42.03]</text>
+<text x="240" y="130" font-size="12.5" fill="#222" text-anchor="end">S2 稀缺</text>
+<line x1="346.71277884190664" y1="126" x2="361.00516304877334" y2="126" stroke="#1b6ef3" stroke-width="2"/>
+<line x1="346.71277884190664" y1="119" x2="346.71277884190664" y2="133" stroke="#1b6ef3" stroke-width="2"/>
+<line x1="361.00516304877334" y1="119" x2="361.00516304877334" y2="133" stroke="#1b6ef3" stroke-width="2"/>
+<circle cx="353.14202765127925" cy="126" r="4.5" fill="#1b6ef3"/>
+<text x="722" y="130" font-size="12" fill="#222">-47.82 [-48.70, -46.74]</text>
+<text x="240" y="162" font-size="12.5" fill="#222" text-anchor="end">S3 平衡</text>
+<line x1="478.1422936372393" y1="158" x2="526.5967161346024" y2="158" stroke="#1b6ef3" stroke-width="2"/>
+<line x1="478.1422936372393" y1="151" x2="478.1422936372393" y2="165" stroke="#1b6ef3" stroke-width="2"/>
+<line x1="526.5967161346024" y1="151" x2="526.5967161346024" y2="165" stroke="#1b6ef3" stroke-width="2"/>
+<circle cx="502.8593122126705" cy="158" r="4.5" fill="#1b6ef3"/>
+<text x="722" y="162" font-size="12" fill="#222">-27.34 [-30.72, -24.09]</text>
+<text x="240" y="194" font-size="12.5" fill="#222" text-anchor="end">S4 過剩</text>
+<line x1="680.4819303282089" y1="190" x2="698.9254337090276" y2="190" stroke="#1b6ef3" stroke-width="2"/>
+<line x1="680.4819303282089" y1="183" x2="680.4819303282089" y2="197" stroke="#1b6ef3" stroke-width="2"/>
+<line x1="698.9254337090276" y1="183" x2="698.9254337090276" y2="197" stroke="#1b6ef3" stroke-width="2"/>
+<circle cx="689.967132931105" cy="190" r="4.5" fill="#1b6ef3"/>
+<text x="722" y="194" font-size="12" fill="#222">-1.74 [-3.04, -0.52]</text>
+<text x="240" y="226" font-size="12.5" fill="#222" text-anchor="end">S5 在地志工</text>
+<line x1="357.6357046455012" y1="222" x2="389.9447328294427" y2="222" stroke="#1b6ef3" stroke-width="2"/>
+<line x1="357.6357046455012" y1="215" x2="357.6357046455012" y2="229" stroke="#1b6ef3" stroke-width="2"/>
+<line x1="389.9447328294427" y1="215" x2="389.9447328294427" y2="229" stroke="#1b6ef3" stroke-width="2"/>
+<circle cx="373.64508094618685" cy="222" r="4.5" fill="#1b6ef3"/>
+<text x="722" y="226" font-size="12" fill="#222">-45.01 [-47.20, -42.78]</text>
+<text x="240" y="258" font-size="12.5" fill="#222" text-anchor="end">S6 對照（無偏差、供給充足）</text>
+<line x1="592.4338993057731" y1="254" x2="633.4689404009605" y2="254" stroke="#1b6ef3" stroke-width="2"/>
+<line x1="592.4338993057731" y1="247" x2="592.4338993057731" y2="261" stroke="#1b6ef3" stroke-width="2"/>
+<line x1="633.4689404009605" y1="247" x2="633.4689404009605" y2="261" stroke="#1b6ef3" stroke-width="2"/>
+<circle cx="613.2323755448612" cy="254" r="4.5" fill="#1b6ef3"/>
+<text x="722" y="258" font-size="12" fill="#222">-12.24 [-15.08, -9.47]</text>
+<text x="240" y="290" font-size="12.5" fill="#222" text-anchor="end">S7 低遵從</text>
+<line x1="387.2848048852237" y1="286" x2="419.4717346514533" y2="286" stroke="#1b6ef3" stroke-width="2"/>
+<line x1="387.2848048852237" y1="279" x2="387.2848048852237" y2="293" stroke="#1b6ef3" stroke-width="2"/>
+<line x1="419.4717346514533" y1="279" x2="419.4717346514533" y2="293" stroke="#1b6ef3" stroke-width="2"/>
+<circle cx="403.10308513959495" cy="286" r="4.5" fill="#1b6ef3"/>
+<text x="722" y="290" font-size="12" fill="#222">-40.98 [-43.15, -38.74]</text>
+<text x="240" y="322" font-size="12.5" fill="#222" text-anchor="end">S8 高缺漏</text>
+<line x1="403.7447952022525" y1="318" x2="435.7352428131393" y2="318" stroke="#1b6ef3" stroke-width="2"/>
+<line x1="403.7447952022525" y1="311" x2="403.7447952022525" y2="325" stroke="#1b6ef3" stroke-width="2"/>
+<line x1="435.7352428131393" y1="311" x2="435.7352428131393" y2="325" stroke="#1b6ef3" stroke-width="2"/>
+<circle cx="419.40978045768986" cy="318" r="4.5" fill="#1b6ef3"/>
+<text x="722" y="322" font-size="12" fill="#222">-38.75 [-40.90, -36.52]</text>
+<text x="240" y="354" font-size="12.5" fill="#222" text-anchor="end">S9 權重抖動</text>
+<line x1="366.2320560530758" y1="350" x2="398.68478921270923" y2="350" stroke="#1b6ef3" stroke-width="2"/>
+<line x1="366.2320560530758" y1="343" x2="366.2320560530758" y2="357" stroke="#1b6ef3" stroke-width="2"/>
+<line x1="398.68478921270923" y1="343" x2="398.68478921270923" y2="357" stroke="#1b6ef3" stroke-width="2"/>
+<circle cx="382.31425956417354" cy="350" r="4.5" fill="#1b6ef3"/>
+<text x="722" y="354" font-size="12" fill="#222">-43.83 [-46.03, -41.59]</text>
+<text x="240" y="386" font-size="12.5" fill="#222" text-anchor="end">S10 強基準</text>
+<line x1="452.6177117458458" y1="382" x2="498.79401281177036" y2="382" stroke="#1b6ef3" stroke-width="2"/>
+<line x1="452.6177117458458" y1="375" x2="452.6177117458458" y2="389" stroke="#1b6ef3" stroke-width="2"/>
+<line x1="498.79401281177036" y1="375" x2="498.79401281177036" y2="389" stroke="#1b6ef3" stroke-width="2"/>
+<circle cx="475.9806973215195" cy="382" r="4.5" fill="#1b6ef3"/>
+<text x="722" y="386" font-size="12" fill="#222">-31.01 [-34.21, -27.89]</text>
+<text x="240" y="418" font-size="12.5" fill="#222" text-anchor="end">S11 反向偏差</text>
+<line x1="291.15364552717625" y1="414" x2="294.7852623496916" y2="414" stroke="#1b6ef3" stroke-width="2"/>
+<line x1="291.15364552717625" y1="407" x2="291.15364552717625" y2="421" stroke="#1b6ef3" stroke-width="2"/>
+<line x1="294.7852623496916" y1="407" x2="294.7852623496916" y2="421" stroke="#1b6ef3" stroke-width="2"/>
+<circle cx="292.95931217326915" cy="414" r="4.5" fill="#1b6ef3"/>
+<text x="722" y="418" font-size="12" fill="#222">-56.05 [-56.30, -55.80]</text>
+<circle cx="26" cy="464" r="4.5" fill="#1b6ef3"/><text x="38" y="468" font-size="11.5" fill="#444">CI 完全在負側（care_score 較快）</text>
+<circle cx="260" cy="464" r="4.5" fill="#777"/><text x="272" y="468" font-size="11.5" fill="#444">CI 包含 0</text>
+<circle cx="360" cy="464" r="4.5" fill="#c0392b"/><text x="372" y="468" font-size="11.5" fill="#444">CI 完全在正側（latest 較快）</text>
+</svg>

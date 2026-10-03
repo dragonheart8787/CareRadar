@@ -1,0 +1,265 @@
+scenario,metric,term,mean,ci_low,ci_high
+S1,median_wait_vulnerable,"額滿導流效應（latest 排序）= coordinated_latest − latest",-43.41798415172764,-45.22047485812101,-41.50875669603129
+S1,median_wait_vulnerable,"額滿導流效應（nearest 排序）= coordinated_nearest − nearest",-37.40690044101205,-38.21043115034103,-36.56002841862741
+S1,median_wait_vulnerable,"額滿導流效應（Care Score 排序）= care_score_full_compliance − care_score_uncoordinated",-55.14926220680172,-55.4001216696072,-54.89334645509076
+S1,median_wait_vulnerable,"排序效應（p 為基準值，相對 latest）= care_score_uncoordinated − latest",9.121047537529337,6.963778033904137,11.301352763705506
+S1,median_wait_vulnerable,"排序效應（p 為基準值，相對 nearest）= care_score_uncoordinated − nearest",-1.7976170764967647,-1.9366030569890094,-1.672254883691734
+S1,median_wait_vulnerable,"排序效應（p = 1，相對 coordinated_latest）= care_score_full_compliance − coordinated_latest",-2.6102305175447227,-3.6133491283245744,-1.629514530890437
+S1,median_wait_vulnerable,"排序效應（p = 1，相對 coordinated_nearest）= care_score_full_compliance − coordinated_nearest",-19.539978842286445,-20.434974307459136,-18.68411638231512
+S1,median_wait_vulnerable,"兩者合計（相對 latest）= care_score_full_compliance − latest",-46.02821466927237,-48.18043952564608,-43.79054373499569
+S1,median_wait_vulnerable,"交互作用（相對 latest）= 合計 − 導流效應 − 排序效應",-11.73127805507407,-13.66147694070196,-9.932936526649733
+S1,median_wait_vulnerable,"兩者合計（相對 nearest）= care_score_full_compliance − nearest",-56.946879283298486,-57.19895255631309,-56.69260986035065
+S1,median_wait_vulnerable,"交互作用（相對 nearest）= 合計 − 導流效應 − 排序效應",-17.742361765789667,-18.639675132576322,-16.873555746015132
+S1,median_wait_vulnerable,"遵從率 0.7 的代價 = care_score − care_score_full_compliance",1.7779880545558808,1.628379738084475,1.9251922114755056
+S1,unserved_frac_vulnerable,"額滿導流效應（latest 排序）= coordinated_latest − latest",-0.34037620608640856,-0.34843317010155406,-0.3324989853268353
+S1,unserved_frac_vulnerable,"額滿導流效應（nearest 排序）= coordinated_nearest − nearest",-0.6517584710663964,-0.658317154155202,-0.6450017653924179
+S1,unserved_frac_vulnerable,"額滿導流效應（Care Score 排序）= care_score_full_compliance − care_score_uncoordinated",-0.7985416987984035,-0.8032299624247989,-0.7936987677605699
+S1,unserved_frac_vulnerable,"排序效應（p 為基準值，相對 latest）= care_score_uncoordinated − latest",0.262614233536628,0.2542214277062418,0.27149741991134696
+S1,unserved_frac_vulnerable,"排序效應（p 為基準值，相對 nearest）= care_score_uncoordinated − nearest",-0.1165424273208369,-0.12139537615991701,-0.11171738570112616
+S1,unserved_frac_vulnerable,"排序效應（p = 1，相對 coordinated_latest）= care_score_full_compliance − coordinated_latest",-0.19555125917536761,-0.2018644829358956,-0.18903892377647838
+S1,unserved_frac_vulnerable,"排序效應（p = 1，相對 coordinated_nearest）= care_score_full_compliance − coordinated_nearest",-0.26332565505284355,-0.2699228021421591,-0.25690715939448067
+S1,unserved_frac_vulnerable,"兩者合計（相對 latest）= care_score_full_compliance − latest",-0.5359274652617763,-0.5442945822105881,-0.5278489030144007
+S1,unserved_frac_vulnerable,"交互作用（相對 latest）= 合計 − 導流效應 − 排序效應",-0.45816549271199525,-0.4674003898990937,-0.4489648483411594
+S1,unserved_frac_vulnerable,"兩者合計（相對 nearest）= care_score_full_compliance − nearest",-0.9150841261192414,-0.9191010894535361,-0.9112330878036556
+S1,unserved_frac_vulnerable,"交互作用（相對 nearest）= 合計 − 導流效應 − 排序效應",-0.14678322773200655,-0.15488307224944048,-0.13867664521576023
+S1,unserved_frac_vulnerable,"遵從率 0.7 的代價 = care_score − care_score_full_compliance",0.028898543189440642,0.025129302352437353,0.03269091380802075
+S2,median_wait_vulnerable,"額滿導流效應（latest 排序）= coordinated_latest − latest",-30.768778594847632,-32.54667882693963,-28.89170364648591
+S2,median_wait_vulnerable,"額滿導流效應（nearest 排序）= coordinated_nearest − nearest",-13.381310386144824,-14.185694404017271,-12.599684212770812
+S2,median_wait_vulnerable,"額滿導流效應（Care Score 排序）= care_score_full_compliance − care_score_uncoordinated",-51.5563077180542,-51.85621445065224,-51.25718722375014
+S2,median_wait_vulnerable,"排序效應（p 為基準值，相對 latest）= care_score_uncoordinated − latest",1.2167801749202984,0.4374787384691735,2.196803486257711
+S2,median_wait_vulnerable,"排序效應（p 為基準值，相對 nearest）= care_score_uncoordinated − nearest",-1.7063206615137316,-1.8363980889538387,-1.586400666125855
+S2,median_wait_vulnerable,"排序效應（p = 1，相對 coordinated_latest）= care_score_full_compliance − coordinated_latest",-19.570748948286255,-21.716358647216826,-17.573512178258284
+S2,median_wait_vulnerable,"排序效應（p = 1，相對 coordinated_nearest）= care_score_full_compliance − coordinated_nearest",-39.88131799342312,-40.709691940632105,-39.050407620312306
+S2,median_wait_vulnerable,"兩者合計（相對 latest）= care_score_full_compliance − latest",-50.33952754313392,-51.20702792446281,-49.28856625450968
+S2,median_wait_vulnerable,"交互作用（相對 latest）= 合計 − 導流效應 − 排序效應",-20.78752912320656,-22.728355966473025,-18.90943009442098
+S2,median_wait_vulnerable,"兩者合計（相對 nearest）= care_score_full_compliance − nearest",-53.26262837956795,-53.556094572767314,-52.95924960600095
+S2,median_wait_vulnerable,"交互作用（相對 nearest）= 合計 − 導流效應 − 排序效應",-38.174997331909346,-38.99834294938475,-37.31395147085831
+S2,median_wait_vulnerable,"遵從率 0.7 的代價 = care_score − care_score_full_compliance",2.521074301413712,2.3283984401047007,2.716243590577159
+S2,unserved_frac_vulnerable,"額滿導流效應（latest 排序）= coordinated_latest − latest",-0.22760631980543844,-0.23370178190479052,-0.22139968165948384
+S2,unserved_frac_vulnerable,"額滿導流效應（nearest 排序）= coordinated_nearest − nearest",-0.4589203098024144,-0.46608415698981775,-0.45177705541525626
+S2,unserved_frac_vulnerable,"額滿導流效應（Care Score 排序）= care_score_full_compliance − care_score_uncoordinated",-0.7004988743091822,-0.7064072914711104,-0.6944862269488955
+S2,unserved_frac_vulnerable,"排序效應（p 為基準值，相對 latest）= care_score_uncoordinated − latest",0.21209494842411963,0.20354586349158518,0.220275218323581
+S2,unserved_frac_vulnerable,"排序效應（p 為基準值，相對 nearest）= care_score_uncoordinated − nearest",-0.11044101606883587,-0.11500391662500024,-0.1057411826634148
+S2,unserved_frac_vulnerable,"排序效應（p = 1，相對 coordinated_latest）= care_score_full_compliance − coordinated_latest",-0.2607976060796245,-0.26980457468375896,-0.25225800646743274
+S2,unserved_frac_vulnerable,"排序效應（p = 1，相對 coordinated_nearest）= care_score_full_compliance − coordinated_nearest",-0.3520195805756036,-0.3604385127941994,-0.34299371290743175
+S2,unserved_frac_vulnerable,"兩者合計（相對 latest）= care_score_full_compliance − latest",-0.4884039258850632,-0.4976078398702347,-0.47945171939670844
+S2,unserved_frac_vulnerable,"交互作用（相對 latest）= 合計 − 導流效應 − 排序效應",-0.4728925545037441,-0.4815887537119929,-0.4644022164728537
+S2,unserved_frac_vulnerable,"兩者合計（相對 nearest）= care_score_full_compliance − nearest",-0.8109398903780177,-0.8167896268756779,-0.8048777119308067
+S2,unserved_frac_vulnerable,"交互作用（相對 nearest）= 合計 − 導流效應 − 排序效應",-0.24157856450676793,-0.2507859147822839,-0.23261194380853756
+S2,unserved_frac_vulnerable,"遵從率 0.7 的代價 = care_score − care_score_full_compliance",0.0612099754129951,0.0562044878697996,0.06642631042108109
+S3,median_wait_vulnerable,"額滿導流效應（latest 排序）= coordinated_latest − latest",-29.827871909214014,-32.92683615804416,-26.814491262476466
+S3,median_wait_vulnerable,"額滿導流效應（nearest 排序）= coordinated_nearest − nearest",-50.26664829116243,-50.58139614618847,-49.93207663879301
+S3,median_wait_vulnerable,"額滿導流效應（Care Score 排序）= care_score_full_compliance − care_score_uncoordinated",-57.9877508502107,-58.19300746542033,-57.76871431071106
+S3,median_wait_vulnerable,"排序效應（p 為基準值，相對 latest）= care_score_uncoordinated − latest",29.551309928215396,26.233597470022236,32.73064387072152
+S3,median_wait_vulnerable,"排序效應（p 為基準值，相對 nearest）= care_score_uncoordinated − nearest",-2.0273490838678065,-2.170083921110835,-1.8970434060608818
+S3,median_wait_vulnerable,"排序效應（p = 1，相對 coordinated_latest）= care_score_full_compliance − coordinated_latest",1.3914309872187263,0.836440207362855,1.9100939351102495
+S3,median_wait_vulnerable,"排序效應（p = 1，相對 coordinated_nearest）= care_score_full_compliance − coordinated_nearest",-9.748451642916077,-10.093128445719893,-9.388702173355233
+S3,median_wait_vulnerable,"兩者合計（相對 latest）= care_score_full_compliance − latest",-28.436440921995302,-31.77640261516882,-25.22127153851295
+S3,median_wait_vulnerable,"交互作用（相對 latest）= 合計 − 導流效應 − 排序效應",-28.159878940996677,-31.185357651953723,-25.082168474954077
+S3,median_wait_vulnerable,"兩者合計（相對 nearest）= care_score_full_compliance − nearest",-60.01509993407851,-60.20421975315157,-59.81282162623971
+S3,median_wait_vulnerable,"交互作用（相對 nearest）= 合計 − 導流效應 − 排序效應",-7.721102559048269,-8.081239583411735,-7.333482053744028
+S3,median_wait_vulnerable,"遵從率 0.7 的代價 = care_score − care_score_full_compliance",1.0994307813844675,0.98720476485059,1.207383922181515
+S3,unserved_frac_vulnerable,"額滿導流效應（latest 排序）= coordinated_latest − latest",-0.5068328183501392,-0.5146617340613328,-0.4988849067075216
+S3,unserved_frac_vulnerable,"額滿導流效應（nearest 排序）= coordinated_nearest − nearest",-0.9446883439609964,-0.9478954373383577,-0.9415270957632937
+S3,unserved_frac_vulnerable,"額滿導流效應（Care Score 排序）= care_score_full_compliance − care_score_uncoordinated",-0.8213755760425832,-0.8255240113068545,-0.8172717833845624
+S3,unserved_frac_vulnerable,"排序效應（p 為基準值，相對 latest）= care_score_uncoordinated − latest",0.31360749695711365,0.3044202307373004,0.3225387694037883
+S3,unserved_frac_vulnerable,"排序效應（p 為基準值，相對 nearest）= care_score_uncoordinated − nearest",-0.12698106380980048,-0.13189971206123613,-0.12185547840320543
+S3,unserved_frac_vulnerable,"排序效應（p = 1，相對 coordinated_latest）= care_score_full_compliance − coordinated_latest",-0.0009352607353303057,-0.001559445820587566,-0.0003782336139480618
+S3,unserved_frac_vulnerable,"排序效應（p = 1，相對 coordinated_nearest）= care_score_full_compliance − coordinated_nearest",-0.0036682958913874407,-0.004714309596597215,-0.0026980187049879282
+S3,unserved_frac_vulnerable,"兩者合計（相對 latest）= care_score_full_compliance − latest",-0.5077680790854695,-0.5156612309653155,-0.4998065525633324
+S3,unserved_frac_vulnerable,"交互作用（相對 latest）= 合計 − 導流效應 − 排序效應",-0.31454275769244405,-0.3235177975564662,-0.305400839437769
+S3,unserved_frac_vulnerable,"兩者合計（相對 nearest）= care_score_full_compliance − nearest",-0.9483566398523836,-0.9514543092515045,-0.9452892313859862
+S3,unserved_frac_vulnerable,"交互作用（相對 nearest）= 合計 − 導流效應 − 排序效應",0.123312767918413,0.11814128235636732,0.12843862907494777
+S3,unserved_frac_vulnerable,"遵從率 0.7 的代價 = care_score − care_score_full_compliance",0.00005326096412963592,-0.0003016725464959373,0.00041155468980897265
+S4,median_wait_vulnerable,"額滿導流效應（latest 排序）= coordinated_latest − latest",-2.365358730892424,-3.6570550983428136,-1.1416424746540799
+S4,median_wait_vulnerable,"額滿導流效應（nearest 排序）= coordinated_nearest − nearest",-60.41890967705076,-60.582479108537726,-60.25011413449179
+S4,median_wait_vulnerable,"額滿導流效應（Care Score 排序）= care_score_full_compliance − care_score_uncoordinated",-61.07875179639014,-61.27054646695402,-60.87621969853055
+S4,median_wait_vulnerable,"排序效應（p 為基準值，相對 latest）= care_score_uncoordinated − latest",59.05196349323765,57.75299054328608,60.28142427603753
+S4,median_wait_vulnerable,"排序效應（p 為基準值，相對 nearest）= care_score_uncoordinated − nearest",-2.462177210375389,-2.6261364987552613,-2.306386748648263
+S4,median_wait_vulnerable,"排序效應（p = 1，相對 coordinated_latest）= care_score_full_compliance − coordinated_latest",0.33857042773991863,0.2807932200562749,0.40038045853094967
+S4,median_wait_vulnerable,"排序效應（p = 1，相對 coordinated_nearest）= care_score_full_compliance − coordinated_nearest",-3.1220193297147705,-3.298846116255029,-2.9527375476084576
+S4,median_wait_vulnerable,"兩者合計（相對 latest）= care_score_full_compliance − latest",-2.026788303152504,-3.3264321982413776,-0.7959612914703875
+S4,median_wait_vulnerable,"交互作用（相對 latest）= 合計 − 導流效應 − 排序效應",-58.71339306549772,-59.91593503493181,-57.43527210315785
+S4,median_wait_vulnerable,"兩者合計（相對 nearest）= care_score_full_compliance − nearest",-63.54092900676561,-63.68974138545024,-63.38422839588044
+S4,median_wait_vulnerable,"交互作用（相對 nearest）= 合計 − 導流效應 − 排序效應",-0.6598421193393814,-0.8951240051001126,-0.43165163842656834
+S4,median_wait_vulnerable,"遵從率 0.7 的代價 = care_score − care_score_full_compliance",0.2862762224954533,0.2402638255867709,0.3346576481731907
+S4,unserved_frac_vulnerable,"額滿導流效應（latest 排序）= coordinated_latest − latest",-0.3819860752742835,-0.3894039657133535,-0.37455821269855716
+S4,unserved_frac_vulnerable,"額滿導流效應（nearest 排序）= coordinated_nearest − nearest",-0.9380910885841113,-0.9412892895301966,-0.9347916695754149
+S4,unserved_frac_vulnerable,"額滿導流效應（Care Score 排序）= care_score_full_compliance − care_score_uncoordinated",-0.7962854672521966,-0.8010419901011849,-0.7914679927449325
+S4,unserved_frac_vulnerable,"排序效應（p 為基準值，相對 latest）= care_score_uncoordinated − latest",0.4142993919779126,0.40516438542484523,0.4234633212304576
+S4,unserved_frac_vulnerable,"排序效應（p 為基準值，相對 nearest）= care_score_uncoordinated − nearest",-0.14180562133191515,-0.1471801075173695,-0.13608041372456509
+S4,unserved_frac_vulnerable,"排序效應（p = 1，相對 coordinated_latest）= care_score_full_compliance − coordinated_latest",0,0,0
+S4,unserved_frac_vulnerable,"排序效應（p = 1，相對 coordinated_nearest）= care_score_full_compliance − coordinated_nearest",0,0,0
+S4,unserved_frac_vulnerable,"兩者合計（相對 latest）= care_score_full_compliance − latest",-0.3819860752742835,-0.3894039657133535,-0.37455821269855716
+S4,unserved_frac_vulnerable,"交互作用（相對 latest）= 合計 − 導流效應 − 排序效應",-0.4142993919779126,-0.4234633212304576,-0.40516438542484523
+S4,unserved_frac_vulnerable,"兩者合計（相對 nearest）= care_score_full_compliance − nearest",-0.9380910885841113,-0.9412892895301966,-0.9347916695754149
+S4,unserved_frac_vulnerable,"交互作用（相對 nearest）= 合計 − 導流效應 − 排序效應",0.14180562133191515,0.13608041372456509,0.1471801075173695
+S4,unserved_frac_vulnerable,"遵從率 0.7 的代價 = care_score − care_score_full_compliance",0,0,0
+S5,median_wait_vulnerable,"額滿導流效應（latest 排序）= coordinated_latest − latest",-43.434611385857295,-45.237539484387874,-41.530364782553306
+S5,median_wait_vulnerable,"額滿導流效應（nearest 排序）= coordinated_nearest − nearest",-16.125731848709876,-17.42214141300934,-14.842910683497712
+S5,median_wait_vulnerable,"額滿導流效應（Care Score 排序）= care_score_full_compliance − care_score_uncoordinated",-55.165093098935756,-55.41222419215899,-54.91137483678106
+S5,median_wait_vulnerable,"排序效應（p 為基準值，相對 latest）= care_score_uncoordinated − latest",9.127014768016002,6.9710477115689615,11.313398309012246
+S5,median_wait_vulnerable,"排序效應（p 為基準值，相對 nearest）= care_score_uncoordinated − nearest",31.190307135633812,29.592571808832428,32.72743141158176
+S5,median_wait_vulnerable,"排序效應（p = 1，相對 coordinated_latest）= care_score_full_compliance − coordinated_latest",-2.6034669450624848,-3.6123841660103784,-1.6153968936307508
+S5,median_wait_vulnerable,"排序效應（p = 1，相對 coordinated_nearest）= care_score_full_compliance − coordinated_nearest",-7.849054114592081,-8.364457635554345,-7.31004104319102
+S5,median_wait_vulnerable,"兩者合計（相對 latest）= care_score_full_compliance − latest",-46.038078330919774,-48.197482541822936,-43.80723611854739
+S5,median_wait_vulnerable,"交互作用（相對 latest）= 合計 − 導流效應 − 排序效應",-11.730481713078486,-13.665709950055492,-9.9098038601502
+S5,median_wait_vulnerable,"兩者合計（相對 nearest）= care_score_full_compliance − nearest",-23.974785963301958,-25.552487730943565,-22.45640215388416
+S5,median_wait_vulnerable,"交互作用（相對 nearest）= 合計 − 導流效應 − 排序效應",-39.03936125022593,-40.33144747608276,-37.678311937388884
+S5,median_wait_vulnerable,"遵從率 0.7 的代價 = care_score − care_score_full_compliance",1.0244590179532584,0.8751940780435128,1.1738383646052841
+S5,unserved_frac_vulnerable,"額滿導流效應（latest 排序）= coordinated_latest − latest",-0.3402376528074721,-0.3483204105389806,-0.33220078163389855
+S5,unserved_frac_vulnerable,"額滿導流效應（nearest 排序）= coordinated_nearest − nearest",-0.20296107659279713,-0.21029434148412154,-0.1961532190643377
+S5,unserved_frac_vulnerable,"額滿導流效應（Care Score 排序）= care_score_full_compliance − care_score_uncoordinated",-0.7986722700476189,-0.8033558228717829,-0.793846915908718
+S5,unserved_frac_vulnerable,"排序效應（p 為基準值，相對 latest）= care_score_uncoordinated − latest",0.2626707307117692,0.254277924881383,0.27155391708648824
+S5,unserved_frac_vulnerable,"排序效應（p 為基準值，相對 nearest）= care_score_uncoordinated − nearest",0.42033940358281946,0.41089364470808487,0.4293389349491665
+S5,unserved_frac_vulnerable,"排序效應（p = 1，相對 coordinated_latest）= care_score_full_compliance − coordinated_latest",-0.1957638865283781,-0.20225856661907338,-0.1893655896224461
+S5,unserved_frac_vulnerable,"排序效應（p = 1，相對 coordinated_nearest）= care_score_full_compliance − coordinated_nearest",-0.175371789872003,-0.18164184936466599,-0.16885497655675002
+S5,unserved_frac_vulnerable,"兩者合計（相對 latest）= care_score_full_compliance − latest",-0.5360015393358504,-0.5443566914190658,-0.5279255461214102
+S5,unserved_frac_vulnerable,"交互作用（相對 latest）= 合計 − 導流效應 − 排序效應",-0.45843461724014695,-0.4675377682407686,-0.4493250959633854
+S5,unserved_frac_vulnerable,"兩者合計（相對 nearest）= care_score_full_compliance − nearest",-0.3783328664648,-0.38747295442349416,-0.36955590019419104
+S5,unserved_frac_vulnerable,"交互作用（相對 nearest）= 合計 − 導流效應 − 排序效應",-0.5957111934548227,-0.6036518492027253,-0.5874737794438369
+S5,unserved_frac_vulnerable,"遵從率 0.7 的代價 = care_score − care_score_full_compliance",0.014189020577034457,0.01063351693067715,0.01767455296914754
+S6,median_wait_vulnerable,"額滿導流效應（latest 排序）= coordinated_latest − latest",-13.33551879108356,-16.095530223774524,-10.626904801553978
+S6,median_wait_vulnerable,"額滿導流效應（nearest 排序）= coordinated_nearest − nearest",-60.419426155011166,-60.583116087955716,-60.24995364206187
+S6,median_wait_vulnerable,"額滿導流效應（Care Score 排序）= care_score_full_compliance − care_score_uncoordinated",-62.7262391196371,-62.87420847480036,-62.56908371728658
+S6,median_wait_vulnerable,"排序效應（p 為基準值，相對 latest）= care_score_uncoordinated − latest",49.9735300044593,47.17003938971357,52.70299727026968
+S6,median_wait_vulnerable,"排序效應（p 為基準值，相對 nearest）= care_score_uncoordinated − nearest",-1.8931833454621128,-2.019304148049405,-1.7748749435903441
+S6,median_wait_vulnerable,"排序效應（p = 1，相對 coordinated_latest）= care_score_full_compliance − coordinated_latest",0.5828096759056967,0.4340840968530789,0.7296188008817688
+S6,median_wait_vulnerable,"排序效應（p = 1，相對 coordinated_nearest）= care_score_full_compliance − coordinated_nearest",-4.1999963100881015,-4.372113803522233,-4.029376480000405
+S6,median_wait_vulnerable,"兩者合計（相對 latest）= care_score_full_compliance − latest",-12.752709115177874,-15.588299755509967,-9.969701039264143
+S6,median_wait_vulnerable,"交互作用（相對 latest）= 合計 − 導流效應 − 排序效應",-49.390720328553535,-52.08221375681349,-46.62523577483748
+S6,median_wait_vulnerable,"兩者合計（相對 nearest）= care_score_full_compliance − nearest",-64.61942246509926,-64.74395878723803,-64.48592284085535
+S6,median_wait_vulnerable,"交互作用（相對 nearest）= 合計 − 導流效應 − 排序效應",-2.3068129646259865,-2.51375807826692,-2.099522152547472
+S6,median_wait_vulnerable,"遵從率 0.7 的代價 = care_score − care_score_full_compliance",0.5148214516812893,0.45149073218405517,0.5802095869716996
+S6,unserved_frac_vulnerable,"額滿導流效應（latest 排序）= coordinated_latest − latest",-0.45179890539510476,-0.4594358185369555,-0.4437148371924932
+S6,unserved_frac_vulnerable,"額滿導流效應（nearest 排序）= coordinated_nearest − nearest",-0.9356855277979145,-0.9390156302873967,-0.9323389102823887
+S6,unserved_frac_vulnerable,"額滿導流效應（Care Score 排序）= care_score_full_compliance − care_score_uncoordinated",-0.7986110025510788,-0.8029272386373655,-0.7942633330379982
+S6,unserved_frac_vulnerable,"排序效應（p 為基準值，相對 latest）= care_score_uncoordinated − latest",0.34681209715597444,0.33781194925766334,0.3557037475908967
+S6,unserved_frac_vulnerable,"排序效應（p 為基準值，相對 nearest）= care_score_uncoordinated − nearest",-0.13707452524683575,-0.14225131750192901,-0.13175447607129917
+S6,unserved_frac_vulnerable,"排序效應（p = 1，相對 coordinated_latest）= care_score_full_compliance − coordinated_latest",0,0,0
+S6,unserved_frac_vulnerable,"排序效應（p = 1，相對 coordinated_nearest）= care_score_full_compliance − coordinated_nearest",0,0,0
+S6,unserved_frac_vulnerable,"兩者合計（相對 latest）= care_score_full_compliance − latest",-0.45179890539510476,-0.4594358185369555,-0.4437148371924932
+S6,unserved_frac_vulnerable,"交互作用（相對 latest）= 合計 − 導流效應 − 排序效應",-0.34681209715597444,-0.3557037475908967,-0.33781194925766334
+S6,unserved_frac_vulnerable,"兩者合計（相對 nearest）= care_score_full_compliance − nearest",-0.9356855277979145,-0.9390156302873967,-0.9323389102823887
+S6,unserved_frac_vulnerable,"交互作用（相對 nearest）= 合計 − 導流效應 − 排序效應",0.13707452524683575,0.13175447607129917,0.14225131750192901
+S6,unserved_frac_vulnerable,"遵從率 0.7 的代價 = care_score − care_score_full_compliance",0,0,0
+S7,median_wait_vulnerable,"額滿導流效應（latest 排序）= coordinated_latest − latest",-43.41798415172764,-45.22047485812101,-41.50875669603129
+S7,median_wait_vulnerable,"額滿導流效應（nearest 排序）= coordinated_nearest − nearest",-37.40690044101205,-38.21043115034103,-36.56002841862741
+S7,median_wait_vulnerable,"額滿導流效應（Care Score 排序）= care_score_full_compliance − care_score_uncoordinated",-55.14926220680172,-55.4001216696072,-54.89334645509076
+S7,median_wait_vulnerable,"排序效應（p 為基準值，相對 latest）= care_score_uncoordinated − latest",9.121047537529337,6.963778033904137,11.301352763705506
+S7,median_wait_vulnerable,"排序效應（p 為基準值，相對 nearest）= care_score_uncoordinated − nearest",-1.7976170764967647,-1.9366030569890094,-1.672254883691734
+S7,median_wait_vulnerable,"排序效應（p = 1，相對 coordinated_latest）= care_score_full_compliance − coordinated_latest",-2.6102305175447227,-3.6133491283245744,-1.629514530890437
+S7,median_wait_vulnerable,"排序效應（p = 1，相對 coordinated_nearest）= care_score_full_compliance − coordinated_nearest",-19.539978842286445,-20.434974307459136,-18.68411638231512
+S7,median_wait_vulnerable,"兩者合計（相對 latest）= care_score_full_compliance − latest",-46.02821466927237,-48.18043952564608,-43.79054373499569
+S7,median_wait_vulnerable,"交互作用（相對 latest）= 合計 − 導流效應 − 排序效應",-11.73127805507407,-13.66147694070196,-9.932936526649733
+S7,median_wait_vulnerable,"兩者合計（相對 nearest）= care_score_full_compliance − nearest",-56.946879283298486,-57.19895255631309,-56.69260986035065
+S7,median_wait_vulnerable,"交互作用（相對 nearest）= 合計 − 導流效應 − 排序效應",-17.742361765789667,-18.639675132576322,-16.873555746015132
+S7,median_wait_vulnerable,"遵從率 0.7 的代價 = care_score − care_score_full_compliance",5.0444736601174105,4.80340755403684,5.281623533188732
+S7,unserved_frac_vulnerable,"額滿導流效應（latest 排序）= coordinated_latest − latest",-0.34037620608640856,-0.34843317010155406,-0.3324989853268353
+S7,unserved_frac_vulnerable,"額滿導流效應（nearest 排序）= coordinated_nearest − nearest",-0.6517584710663964,-0.658317154155202,-0.6450017653924179
+S7,unserved_frac_vulnerable,"額滿導流效應（Care Score 排序）= care_score_full_compliance − care_score_uncoordinated",-0.7985416987984035,-0.8032299624247989,-0.7936987677605699
+S7,unserved_frac_vulnerable,"排序效應（p 為基準值，相對 latest）= care_score_uncoordinated − latest",0.262614233536628,0.2542214277062418,0.27149741991134696
+S7,unserved_frac_vulnerable,"排序效應（p 為基準值，相對 nearest）= care_score_uncoordinated − nearest",-0.1165424273208369,-0.12139537615991701,-0.11171738570112616
+S7,unserved_frac_vulnerable,"排序效應（p = 1，相對 coordinated_latest）= care_score_full_compliance − coordinated_latest",-0.19555125917536761,-0.2018644829358956,-0.18903892377647838
+S7,unserved_frac_vulnerable,"排序效應（p = 1，相對 coordinated_nearest）= care_score_full_compliance − coordinated_nearest",-0.26332565505284355,-0.2699228021421591,-0.25690715939448067
+S7,unserved_frac_vulnerable,"兩者合計（相對 latest）= care_score_full_compliance − latest",-0.5359274652617763,-0.5442945822105881,-0.5278489030144007
+S7,unserved_frac_vulnerable,"交互作用（相對 latest）= 合計 − 導流效應 − 排序效應",-0.45816549271199525,-0.4674003898990937,-0.4489648483411594
+S7,unserved_frac_vulnerable,"兩者合計（相對 nearest）= care_score_full_compliance − nearest",-0.9150841261192414,-0.9191010894535361,-0.9112330878036556
+S7,unserved_frac_vulnerable,"交互作用（相對 nearest）= 合計 − 導流效應 − 排序效應",-0.14678322773200655,-0.15488307224944048,-0.13867664521576023
+S7,unserved_frac_vulnerable,"遵從率 0.7 的代價 = care_score − care_score_full_compliance",0.08867566851911732,0.0836541338464695,0.09424814182784373
+S8,median_wait_vulnerable,"額滿導流效應（latest 排序）= coordinated_latest − latest",-43.41798415172764,-45.22047485812101,-41.50875669603129
+S8,median_wait_vulnerable,"額滿導流效應（nearest 排序）= coordinated_nearest − nearest",-37.40690044101205,-38.21043115034103,-36.56002841862741
+S8,median_wait_vulnerable,"額滿導流效應（Care Score 排序）= care_score_full_compliance − care_score_uncoordinated",-50.02624691346035,-50.29894000940937,-49.75283358142423
+S8,median_wait_vulnerable,"排序效應（p 為基準值，相對 latest）= care_score_uncoordinated − latest",9.830536850592047,7.7026385441881215,12.015402426939731
+S8,median_wait_vulnerable,"排序效應（p 為基準值，相對 nearest）= care_score_uncoordinated − nearest",-1.0881277634340591,-1.2060861397479175,-0.9735056256090331
+S8,median_wait_vulnerable,"排序效應（p = 1，相對 coordinated_latest）= care_score_full_compliance − coordinated_latest",3.222274088859361,2.1864594455488002,4.244581323112506
+S8,median_wait_vulnerable,"排序效應（p = 1，相對 coordinated_nearest）= care_score_full_compliance − coordinated_nearest",-13.707474235882355,-14.580609311273163,-12.873307812775131
+S8,median_wait_vulnerable,"兩者合計（相對 latest）= care_score_full_compliance − latest",-40.1957100628683,-42.36315760763142,-37.95204790199857
+S8,median_wait_vulnerable,"交互作用（相對 latest）= 合計 − 導流效應 − 排序效應",-6.608262761732686,-8.526674423184602,-4.788003841148724
+S8,median_wait_vulnerable,"兩者合計（相對 nearest）= care_score_full_compliance − nearest",-51.1143746768944,-51.37749487322346,-50.84688116242769
+S8,median_wait_vulnerable,"交互作用（相對 nearest）= 合計 − 導流效應 − 排序效應",-12.619346472448294,-13.522734264654368,-11.767635340860254
+S8,median_wait_vulnerable,"遵從率 0.7 的代價 = care_score − care_score_full_compliance",1.4427378878070134,1.24948873206035,1.6258613987397768
+S8,unserved_frac_vulnerable,"額滿導流效應（latest 排序）= coordinated_latest − latest",-0.34037620608640856,-0.34843317010155406,-0.3324989853268353
+S8,unserved_frac_vulnerable,"額滿導流效應（nearest 排序）= coordinated_nearest − nearest",-0.6517584710663964,-0.658317154155202,-0.6450017653924179
+S8,unserved_frac_vulnerable,"額滿導流效應（Care Score 排序）= care_score_full_compliance − care_score_uncoordinated",-0.7252532869322,-0.7316929302614898,-0.7188100944399782
+S8,unserved_frac_vulnerable,"排序效應（p 為基準值，相對 latest）= care_score_uncoordinated − latest",0.3033153179373733,0.2950644079749638,0.31182060770483944
+S8,unserved_frac_vulnerable,"排序效應（p 為基準值，相對 nearest）= care_score_uncoordinated − nearest",-0.07584134292009126,-0.0807649035703169,-0.07062649559645032
+S8,unserved_frac_vulnerable,"排序效應（p = 1，相對 coordinated_latest）= care_score_full_compliance − coordinated_latest",-0.08156176290841866,-0.088621574979249,-0.0743651774147517
+S8,unserved_frac_vulnerable,"排序效應（p = 1，相對 coordinated_nearest）= care_score_full_compliance − coordinated_nearest",-0.14933615878589473,-0.15688675482747114,-0.14164382215913623
+S8,unserved_frac_vulnerable,"兩者合計（相對 latest）= care_score_full_compliance − latest",-0.4219379689948272,-0.4304464685362421,-0.41313648750779614
+S8,unserved_frac_vulnerable,"交互作用（相對 latest）= 合計 − 導流效應 − 排序效應",-0.384877080845792,-0.3938525395468632,-0.3754148000898933
+S8,unserved_frac_vulnerable,"兩者合計（相對 nearest）= care_score_full_compliance − nearest",-0.8010946298522919,-0.8067062039014172,-0.7954081572446537
+S8,unserved_frac_vulnerable,"交互作用（相對 nearest）= 合計 − 導流效應 − 排序效應",-0.07349481586580343,-0.08299241363403799,-0.06435370089546616
+S8,unserved_frac_vulnerable,"遵從率 0.7 的代價 = care_score − care_score_full_compliance",-0.002118401217224373,-0.006527384027455511,0.002232999898549098
+S9,median_wait_vulnerable,"額滿導流效應（latest 排序）= coordinated_latest − latest",-43.41798415172764,-45.22047485812101,-41.50875669603129
+S9,median_wait_vulnerable,"額滿導流效應（nearest 排序）= coordinated_nearest − nearest",-37.40690044101205,-38.21043115034103,-36.56002841862741
+S9,median_wait_vulnerable,"額滿導流效應（Care Score 排序）= care_score_full_compliance − care_score_uncoordinated",-54.65986605586082,-54.95380463380296,-54.37056908843676
+S9,median_wait_vulnerable,"排序效應（p 為基準值，相對 latest）= care_score_uncoordinated − latest",9.128820537582179,6.971977609710695,11.307375194766067
+S9,median_wait_vulnerable,"排序效應（p 為基準值，相對 nearest）= care_score_uncoordinated − nearest",-1.789844076443923,-1.9331141988063152,-1.6547891437382438
+S9,median_wait_vulnerable,"排序效應（p = 1，相對 coordinated_latest）= care_score_full_compliance − coordinated_latest",-2.1130613665510087,-3.129179383786674,-1.1069696461784553
+S9,median_wait_vulnerable,"排序效應（p = 1，相對 coordinated_nearest）= care_score_full_compliance − coordinated_nearest",-19.04280969129271,-19.928609718637475,-18.177698091937206
+S9,median_wait_vulnerable,"兩者合計（相對 latest）= care_score_full_compliance − latest",-45.531045518278646,-47.73804765681984,-43.27894327679052
+S9,median_wait_vulnerable,"交互作用（相對 latest）= 合計 − 導流效應 − 排序效應",-11.241881904133194,-13.159541926591757,-9.422663623057996
+S9,median_wait_vulnerable,"兩者合計（相對 nearest）= care_score_full_compliance − nearest",-56.449710132304716,-56.7522576440376,-56.14265247531227
+S9,median_wait_vulnerable,"交互作用（相對 nearest）= 合計 − 導流效應 − 排序效應",-17.252965614848794,-18.130631191017176,-16.386732917806214
+S9,median_wait_vulnerable,"遵從率 0.7 的代價 = care_score − care_score_full_compliance",1.7033767060697134,1.55357703849849,1.8584598691615577
+S9,unserved_frac_vulnerable,"額滿導流效應（latest 排序）= coordinated_latest − latest",-0.34037620608640856,-0.34843317010155406,-0.3324989853268353
+S9,unserved_frac_vulnerable,"額滿導流效應（nearest 排序）= coordinated_nearest − nearest",-0.6517584710663964,-0.658317154155202,-0.6450017653924179
+S9,unserved_frac_vulnerable,"額滿導流效應（Care Score 排序）= care_score_full_compliance − care_score_uncoordinated",-0.7968988431787856,-0.8019575178377361,-0.7918313680308708
+S9,unserved_frac_vulnerable,"排序效應（p 為基準值，相對 latest）= care_score_uncoordinated − latest",0.26450587478659066,0.25568122363001256,0.27348699421028577
+S9,unserved_frac_vulnerable,"排序效應（p 為基準值，相對 nearest）= care_score_uncoordinated − nearest",-0.11465078607087423,-0.11974200352307221,-0.10923617600228323
+S9,unserved_frac_vulnerable,"排序效應（p = 1，相對 coordinated_latest）= care_score_full_compliance − coordinated_latest",-0.19201676230578665,-0.19830338117901095,-0.18546629680148086
+S9,unserved_frac_vulnerable,"排序效應（p = 1，相對 coordinated_nearest）= care_score_full_compliance − coordinated_nearest",-0.25979115818326254,-0.26656584737776323,-0.25348948144652106
+S9,unserved_frac_vulnerable,"兩者合計（相對 latest）= care_score_full_compliance − latest",-0.532392968392195,-0.5404919489241201,-0.5245271575224788
+S9,unserved_frac_vulnerable,"交互作用（相對 latest）= 合計 − 導流效應 − 排序效應",-0.4565226370923767,-0.46612613969247235,-0.44644453815719176
+S9,unserved_frac_vulnerable,"兩者合計（相對 nearest）= care_score_full_compliance − nearest",-0.9115496292496605,-0.915691803145279,-0.9075300278519325
+S9,unserved_frac_vulnerable,"交互作用（相對 nearest）= 合計 − 導流效應 − 排序效應",-0.14514037211238826,-0.15345159377383136,-0.13639043871197157
+S9,unserved_frac_vulnerable,"遵從率 0.7 的代價 = care_score − care_score_full_compliance",0.02822038686278072,0.024374894350211965,0.03204328640361149
+S10,median_wait_vulnerable,"額滿導流效應（latest 排序）= coordinated_latest − latest",-30.18178348205972,-32.758427583187334,-27.762180506918078
+S10,median_wait_vulnerable,"額滿導流效應（nearest 排序）= coordinated_nearest − nearest",-36.237968346414405,-37.02345545055924,-35.39304847548823
+S10,median_wait_vulnerable,"額滿導流效應（Care Score 排序）= care_score_full_compliance − care_score_uncoordinated",-45.38145157704695,-46.16976768696415,-44.50335691366574
+S10,median_wait_vulnerable,"排序效應（p 為基準值，相對 latest）= care_score_uncoordinated − latest",12.589437577442526,9.377030989146425,15.807512511105719
+S10,median_wait_vulnerable,"排序效應（p 為基準值，相對 nearest）= care_score_uncoordinated − nearest",-10.396495611653865,-11.347286681409607,-9.514691691167494
+S10,median_wait_vulnerable,"排序效應（p = 1，相對 coordinated_latest）= care_score_full_compliance − coordinated_latest",-2.6102305175447227,-3.6133491283245744,-1.629514530890437
+S10,median_wait_vulnerable,"排序效應（p = 1，相對 coordinated_nearest）= care_score_full_compliance − coordinated_nearest",-19.539978842286445,-20.434974307459136,-18.68411638231512
+S10,median_wait_vulnerable,"兩者合計（相對 latest）= care_score_full_compliance − latest",-32.79201399960446,-36.00185128477642,-29.655346558729107
+S10,median_wait_vulnerable,"交互作用（相對 latest）= 合計 − 導流效應 − 排序效應",-15.199668094987246,-17.68937921986597,-12.664007202782136
+S10,median_wait_vulnerable,"兩者合計（相對 nearest）= care_score_full_compliance − nearest",-55.77794718870088,-56.04261475215734,-55.509115031718274
+S10,median_wait_vulnerable,"交互作用（相對 nearest）= 合計 − 導流效應 − 排序效應",-9.143483230632574,-10.201840306409142,-8.03763625271341
+S10,median_wait_vulnerable,"遵從率 0.7 的代價 = care_score − care_score_full_compliance",1.7779880545558808,1.628379738084475,1.9251922114755056
+S10,unserved_frac_vulnerable,"額滿導流效應（latest 排序）= coordinated_latest − latest",-0.2850709192083189,-0.2930410947091214,-0.27750588919327757
+S10,unserved_frac_vulnerable,"額滿導流效應（nearest 排序）= coordinated_nearest − nearest",-0.5532768364818184,-0.559760239325572,-0.5464450262510521
+S10,unserved_frac_vulnerable,"額滿導流效應（Care Score 排序）= care_score_full_compliance − care_score_uncoordinated",-0.5288993780424475,-0.5348188460024005,-0.5227143115234928
+S10,unserved_frac_vulnerable,"排序效應（p 為基準值，相對 latest）= care_score_uncoordinated − latest",0.048277199658760504,0.038268352334941906,0.05776481334541266
+S10,unserved_frac_vulnerable,"排序效應（p 為基準值，相對 nearest）= care_score_uncoordinated − nearest",-0.2877031134922145,-0.29506868728554436,-0.2800677558673786
+S10,unserved_frac_vulnerable,"排序效應（p = 1，相對 coordinated_latest）= care_score_full_compliance − coordinated_latest",-0.19555125917536761,-0.2018644829358956,-0.18903892377647838
+S10,unserved_frac_vulnerable,"排序效應（p = 1，相對 coordinated_nearest）= care_score_full_compliance − coordinated_nearest",-0.26332565505284355,-0.2699228021421591,-0.25690715939448067
+S10,unserved_frac_vulnerable,"兩者合計（相對 latest）= care_score_full_compliance − latest",-0.48062217838368676,-0.4891346768222942,-0.4726247304048668
+S10,unserved_frac_vulnerable,"交互作用（相對 latest）= 合計 − 導流效應 − 排序效應",-0.24382845883412818,-0.2531723116226899,-0.23387123653264813
+S10,unserved_frac_vulnerable,"兩者合計（相對 nearest）= care_score_full_compliance − nearest",-0.8166024915346615,-0.8218994780539876,-0.810981800565807
+S10,unserved_frac_vulnerable,"交互作用（相對 nearest）= 合計 − 導流效應 − 排序效應",0.024377458439370888,0.015472063370188395,0.0328413709998243
+S10,unserved_frac_vulnerable,"遵從率 0.7 的代價 = care_score − care_score_full_compliance",0.028898543189440642,0.025129302352437353,0.03269091380802075
+S11,median_wait_vulnerable,"額滿導流效應（latest 排序）= coordinated_latest − latest",-30.32496044759721,-31.484163682413,-29.153570063841272
+S11,median_wait_vulnerable,"額滿導流效應（nearest 排序）= coordinated_nearest − nearest",-38.09165897729585,-38.916591372128494,-37.228468956018816
+S11,median_wait_vulnerable,"額滿導流效應（Care Score 排序）= care_score_full_compliance − care_score_uncoordinated",-57.14839605084141,-57.3581428003624,-56.94285623320384
+S11,median_wait_vulnerable,"排序效應（p 為基準值，相對 latest）= care_score_uncoordinated − latest",-0.7145950626617651,-0.8113198053415986,-0.6233915873640363
+S11,median_wait_vulnerable,"排序效應（p 為基準值，相對 nearest）= care_score_uncoordinated − nearest",-1.0141223444395222,-1.0972579565058147,-0.9372863634522082
+S11,median_wait_vulnerable,"排序效應（p = 1，相對 coordinated_latest）= care_score_full_compliance − coordinated_latest",-27.538030665905982,-28.817562438560127,-26.272794538043904
+S11,median_wait_vulnerable,"排序效應（p = 1，相對 coordinated_nearest）= care_score_full_compliance − coordinated_nearest",-20.07085941798506,-20.974253008674967,-19.213447623789353
+S11,median_wait_vulnerable,"兩者合計（相對 latest）= care_score_full_compliance − latest",-57.86299111350319,-58.077013409900694,-57.65142738789454
+S11,median_wait_vulnerable,"交互作用（相對 latest）= 合計 − 導流效應 − 排序效應",-26.823435603244192,-28.09067500610517,-25.594978747373656
+S11,median_wait_vulnerable,"兩者合計（相對 nearest）= care_score_full_compliance − nearest",-58.162518395280934,-58.376377841164384,-57.95614673813451
+S11,median_wait_vulnerable,"交互作用（相對 nearest）= 合計 − 導流效應 − 排序效應",-19.056737073545545,-19.94481846203405,-18.203988270716614
+S11,median_wait_vulnerable,"遵從率 0.7 的代價 = care_score − care_score_full_compliance",1.8114947308777247,1.6806565892752277,1.9392334136351357
+S11,unserved_frac_vulnerable,"額滿導流效應（latest 排序）= coordinated_latest − latest",-0.37376316571428814,-0.38162305381733386,-0.3663463925220405
+S11,unserved_frac_vulnerable,"額滿導流效應（nearest 排序）= coordinated_nearest − nearest",-0.6503666222159762,-0.6569872470773258,-0.6436973324695939
+S11,unserved_frac_vulnerable,"額滿導流效應（Care Score 排序）= care_score_full_compliance − care_score_uncoordinated",-0.8043597546911053,-0.8088424512157422,-0.7998291152869383
+S11,unserved_frac_vulnerable,"排序效應（p 為基準值，相對 latest）= care_score_uncoordinated − latest",0.12635495097772353,0.11865691829037273,0.13400161410167366
+S11,unserved_frac_vulnerable,"排序效應（p 為基準值，相對 nearest）= care_score_uncoordinated − nearest",-0.1095470311236835,-0.11409319544956892,-0.10498429274807057
+S11,unserved_frac_vulnerable,"排序效應（p = 1，相對 coordinated_latest）= care_score_full_compliance − coordinated_latest",-0.304241637999094,-0.3115188531376695,-0.2967277890792246
+S11,unserved_frac_vulnerable,"排序效應（p = 1，相對 coordinated_nearest）= care_score_full_compliance − coordinated_nearest",-0.2635401635988121,-0.2701609733276987,-0.25720355014957186
+S11,unserved_frac_vulnerable,"兩者合計（相對 latest）= care_score_full_compliance − latest",-0.6780048037133821,-0.6854210584970994,-0.670663983105234
+S11,unserved_frac_vulnerable,"交互作用（相對 latest）= 合計 − 導流效應 − 排序效應",-0.43059658897681735,-0.4394138581827815,-0.42183272241413605
+S11,unserved_frac_vulnerable,"兩者合計（相對 nearest）= care_score_full_compliance − nearest",-0.9139067858147896,-0.9178788426918885,-0.910113113195203
+S11,unserved_frac_vulnerable,"交互作用（相對 nearest）= 合計 − 導流效應 − 排序效應",-0.15399313247512855,-0.16170478517924425,-0.1461949924283944
+S11,unserved_frac_vulnerable,"遵從率 0.7 的代價 = care_score − care_score_full_compliance",0.028971909168936456,0.025179505750312112,0.03288330907110364
