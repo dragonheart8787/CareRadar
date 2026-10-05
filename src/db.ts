@@ -619,12 +619,23 @@ export async function cancelClaim(
   claimRowId: number
 ): Promise<{ case: CaseRow; cancelledVolunteerName: string | null } | null> {
   // 先把名字撈起來 —— DELETE 之後就查不到了，而通知通報者的訊息需要它。
+  //
+  // 名字取通行碼的 label（admin 發碼時填的、驗證過的名稱），不取
+  // volunteer_claims.volunteer_name：後者是志工自己輸入的，誰都能填成「市政府」，
+  // 而這個字串會原樣出現在通報者收到的 LINE 訊息裡。跟認領成功的通知同一個來源。
+  //
+  // 一定要 LEFT JOIN：通行碼機制上線前的舊認領 volunteer_code_id 是 NULL，
+  // INNER JOIN 會讓那幾列整個查不到。label 取不到時回傳 null，由呼叫端的
+  // "匿名志工" fallback 處理 —— 刻意不退回去用自填的 volunteer_name。
   const claimRow = await env.DB.prepare(
-    `SELECT volunteer_name FROM volunteer_claims WHERE id = ?`
+    `SELECT volunteer_codes.label AS label
+     FROM volunteer_claims
+     LEFT JOIN volunteer_codes ON volunteer_codes.id = volunteer_claims.volunteer_code_id
+     WHERE volunteer_claims.id = ?`
   )
     .bind(claimRowId)
-    .first<{ volunteer_name: string | null }>();
-  const cancelledVolunteerName = claimRow?.volunteer_name ?? null;
+    .first<{ label: string | null }>();
+  const cancelledVolunteerName = claimRow?.label ?? null;
 
   const deleteResult = await env.DB.prepare(
     `DELETE FROM volunteer_claims WHERE id = ? AND case_id = ?`
