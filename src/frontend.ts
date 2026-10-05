@@ -114,6 +114,17 @@ export function renderHtml(): string {
   .claim-row button:disabled{ opacity:0.4; cursor:default; }
   .slots{ font-family:"IBM Plex Mono", monospace; font-size:12px; color:var(--ink-dim); }
 
+  .code-row{ display:flex; gap:6px; align-items:center; margin:10px 14px 0; font-size:12px; }
+  .code-row input{
+    flex:1; min-width:0; background:var(--panel-2); border:1px solid var(--line); border-radius:6px;
+    color:var(--ink); padding:6px 8px; font-size:12px; font-family:"IBM Plex Mono", monospace;
+  }
+  .code-row button{
+    padding:6px 12px; border-radius:6px; border:1px solid var(--teal); background:transparent;
+    color:var(--teal); font-size:12px; cursor:pointer; white-space:nowrap; font-family:inherit;
+  }
+  .code-status{ color:var(--ink-dim); white-space:nowrap; }
+
   .addr-row{ margin-top:8px; }
   .addr-row button{
     padding:5px 10px; border-radius:6px; border:1px solid var(--amber); background:transparent;
@@ -157,6 +168,11 @@ export function renderHtml(): string {
 </header>
 <div class="layout">
   <div class="list-panel">
+    <div class="code-row">
+      <input type="text" id="volunteer-code-input" placeholder="志工通行碼（認領時需要）" autocomplete="off" maxlength="64" />
+      <button id="volunteer-code-save">儲存</button>
+      <span class="code-status" id="volunteer-code-status"></span>
+    </div>
     <div class="toggle-row">
       <button class="toggle-btn" data-sort="latest">最新回報排序</button>
       <button class="toggle-btn active" data-sort="care_score">Care Score 排序</button>
@@ -372,13 +388,26 @@ async function refresh(){
 }
 
 async function claimCase(id){
+  // 沒有通行碼就不送出請求：認領一定會被伺服器擋掉，不需要為此打一次 API。
+  const code = readVolunteerCode();
+  if (!code) {
+    alert('請先輸入志工通行碼');
+    return;
+  }
   const nameInput = document.getElementById('name-' + id);
   const name = nameInput ? nameInput.value : '';
   const res = await fetch('/api/cases/' + id + '/claim', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name: name || '匿名志工' }),
+    body: JSON.stringify({ name: name || '匿名志工', code: code }),
   });
+  if (res.status === 403) {
+    // 無效、過期、已被撤銷伺服器端不區分，這裡也不區分。通行碼已經不能用了，
+    // 留著只會讓下一次認領再失敗一次，所以清掉。
+    alert('通行碼無效、已過期或已被撤銷，請向協調單位確認');
+    clearVolunteerCode();
+    return;
+  }
   if (res.status === 409) {
     alert('慢了一步 —— 這個案件的志工名額剛好被別人搶走了，已經自動幫你換一個案件看看。');
   } else if (!res.ok) {
@@ -393,6 +422,38 @@ async function claimCase(id){
   }
   refresh();
 }
+
+// 志工通行碼存在 localStorage（key：volunteer_code）。它的值只會透過 input.value、
+// textContent 與 JSON.stringify 流動，絕不插進任何 HTML 字串。
+const VOLUNTEER_CODE_KEY = 'volunteer_code';
+
+function readVolunteerCode(){
+  try { return localStorage.getItem(VOLUNTEER_CODE_KEY) || ''; } catch { return ''; }
+}
+
+function writeVolunteerCode(value){
+  try { localStorage.setItem(VOLUNTEER_CODE_KEY, value); } catch {}
+}
+
+// 清掉 localStorage，同時把輸入欄與狀態文字一起清掉，畫面才不會繼續顯示一組已經作廢的碼。
+function clearVolunteerCode(){
+  try { localStorage.removeItem(VOLUNTEER_CODE_KEY); } catch {}
+  document.getElementById('volunteer-code-input').value = '';
+  renderVolunteerCodeStatus();
+}
+
+function renderVolunteerCodeStatus(){
+  document.getElementById('volunteer-code-status').textContent = readVolunteerCode() ? '已儲存' : '尚未輸入';
+}
+
+document.getElementById('volunteer-code-input').value = readVolunteerCode();
+renderVolunteerCodeStatus();
+document.getElementById('volunteer-code-save').addEventListener('click', () => {
+  const value = document.getElementById('volunteer-code-input').value.trim();
+  if (value) writeVolunteerCode(value);
+  else clearVolunteerCode();
+  renderVolunteerCodeStatus();
+});
 
 // caseId -> 這次認領拿到的驗證碼。只活在記憶體裡，重新整理頁面就沒了。
 const pendingLineCodes = {};

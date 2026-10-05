@@ -16,6 +16,28 @@ import { computeConfidenceScore, needsHumanVerification } from "./care_score";
 const CLAIM_TOKEN_VALID_HOURS = 72;
 
 /**
+ * 「這筆認領所屬的志工通行碼沒有被撤銷」的 SQL 條件。
+ *
+ * 通行碼可以被 admin 立即撤銷，而 claim token 的 72 小時效期是另一條獨立的線 ——
+ * 如果只在認領當下檢查通行碼，撤銷之後志工手上那組 token 還能繼續查地址，
+ * 「撤銷立即生效」就成了空話。所以每一個「憑 claim token 做事」的查詢都要把這個條件
+ * 加進 WHERE：verifyClaimToken、verifyClaimTokenReturningClaimId、verifyAndBindLineCode。
+ * 三處共用同一個常數，日後改動不會漂移成三種版本。
+ *
+ * volunteer_code_id 是 NULL 的認領是通行碼機制上線前發出的舊認領，照常有效。
+ * 指向不存在的通行碼則視為無效（EXISTS 為假）—— 查不到就拒絕，而不是放行。
+ *
+ * 刻意沒有檢查 expires_at：通行碼過期只影響「新的認領」，不影響已發出的 claim token。
+ *
+ * 這裡用沒有限定資料表名稱的 volunteer_code_id，是為了讓它同時能用在
+ * 有別名（vc）與沒有別名的 volunteer_claims 查詢裡。
+ */
+const CLAIM_CODE_NOT_REVOKED_SQL = `(volunteer_code_id IS NULL OR EXISTS (
+  SELECT 1 FROM volunteer_codes vcode
+  WHERE vcode.id = volunteer_code_id AND vcode.revoked_at IS NULL
+))`;
+
+/**
  * 座標精確度的合併規則。
  *
  * GPS 一律壓過任何文字猜測的結果 —— 就算案件已經有一組 Nominatim 猜出來的
@@ -107,6 +129,17 @@ export class CaseNotMergeableError extends Error {
   constructor() {
     super("case cannot be merged: already completed or closed");
     this.name = "CaseNotMergeableError";
+  }
+}
+
+/**
+ * claimCase 寫入認領之後，發現志工通行碼已經在中間被撤銷。
+ * 該筆認領已經被釋放（名額還回去），呼叫端要回 403，跟「通行碼無效」同一個回應。
+ */
+export class VolunteerCodeRevokedError extends Error {
+  constructor() {
+    super("volunteer code was revoked while claiming");
+    this.name = "VolunteerCodeRevokedError";
   }
 }
 
@@ -565,6 +598,7 @@ export async function verifyClaimTokenReturningClaimId(
      WHERE vc.case_id = ? AND vc.claim_token_hash = ?
        AND vc.claimed_at > datetime('now', '-' || ? || ' hours')
        AND c.status NOT IN ('closed', 'completed')
+       AND ${CLAIM_CODE_NOT_REVOKED_SQL}
      LIMIT 1`
   )
     .bind(caseId, hash, CLAIM_TOKEN_VALID_HOURS)
@@ -764,7 +798,8 @@ function parseNeedTypes(json: string | null): string[] {
 export async function claimCase(
   env: Env,
   caseId: number,
-  volunteer: { name?: string; contact?: string }
+  volunteer: { name?: string; contact?: string },
+  volunteerCodeId: number
 ): Promise<ClaimResult | null> {
   const updateResult = await env.DB.prepare(
     `UPDATE cases
@@ -795,17 +830,47 @@ export async function claimCase(
   const lineVerifyCode = crypto.randomUUID().slice(0, 6).toUpperCase();
 
   await env.DB.prepare(
-    `INSERT INTO volunteer_claims (case_id, volunteer_name, volunteer_contact, claim_token_hash, line_verify_code)
-     VALUES (?, ?, ?, ?, ?)`
+    `INSERT INTO volunteer_claims (case_id, volunteer_name, volunteer_contact, claim_token_hash, line_verify_code, volunteer_code_id)
+     VALUES (?, ?, ?, ?, ?, ?)`
   )
     .bind(
       caseId,
       volunteer.name ?? null,
       volunteer.contact ?? null,
       claimTokenHash,
-      lineVerifyCode
+      lineVerifyCode,
+      volunteerCodeId
     )
     .run();
+
+  // 寫入之後再確認一次這組通行碼沒有在中間被撤銷。
+  //
+  // 呼叫端是「先驗通行碼、再 claimCase」兩步，中間隔著好幾個 D1 往返；若 admin 剛好
+  // 在這段空隙撤銷，revokeVolunteerCode 的釋放掃描可能已經跑完、看不到這筆還沒寫入的
+  // 認領 —— 結果是一個「token 已被 CLAIM_CODE_NOT_REVOKED_SQL 擋死、卻仍佔著名額」的
+  // 幽靈認領，名額再也沒人能釋放。
+  // 在 INSERT 之後檢查就能把兩種交錯都堵上：撤銷的 UPDATE 一定先於它的釋放掃描，
+  // 所以只有兩種可能 —— 我們的 INSERT 先於掃描（掃描會釋放它），或後於掃描
+  //（那這裡一定讀得到 revoked_at，由我們自己釋放）。
+  const inserted = await env.DB.prepare(
+    `SELECT vc.id AS claim_id, (
+       SELECT revoked_at FROM volunteer_codes WHERE id = vc.volunteer_code_id
+     ) AS revoked_at,
+     EXISTS (SELECT 1 FROM volunteer_codes WHERE id = vc.volunteer_code_id) AS code_exists
+     FROM volunteer_claims vc WHERE vc.claim_token_hash = ?`
+  )
+    .bind(claimTokenHash)
+    .first<{ claim_id: number; revoked_at: string | null; code_exists: number }>();
+  if (inserted && (inserted.revoked_at !== null || inserted.code_exists === 0)) {
+    await cancelClaim(env, caseId, inserted.claim_id);
+    await logHistory(
+      env,
+      caseId,
+      "claim_rejected_code_revoked",
+      `code_id=${volunteerCodeId}`
+    );
+    throw new VolunteerCodeRevokedError();
+  }
 
   const updated = await getCase(env, caseId);
   if (!updated) return null;
@@ -849,6 +914,7 @@ export async function verifyClaimToken(
      WHERE vc.case_id = ? AND vc.claim_token_hash = ?
        AND vc.claimed_at > datetime('now', '-' || ? || ' hours')
        AND c.status NOT IN ('closed', 'completed')
+       AND ${CLAIM_CODE_NOT_REVOKED_SQL}
      LIMIT 1`
   )
     .bind(caseId, hash, CLAIM_TOKEN_VALID_HOURS)
@@ -880,6 +946,7 @@ export async function verifyAndBindLineCode(
      WHERE line_verify_code = ?
        AND verified_line_user_id IS NULL
        AND claimed_at > datetime('now', '-' || ? || ' minutes')
+       AND ${CLAIM_CODE_NOT_REVOKED_SQL}
      LIMIT 1`
   )
     .bind(code, LINE_VERIFY_CODE_VALID_MINUTES)
@@ -888,9 +955,12 @@ export async function verifyAndBindLineCode(
 
   // 綁定條件重寫進 WHERE 一次：上面的 SELECT 到這句 UPDATE 之間若有另一個
   // 請求搶先綁走同一組碼，這裡會更新 0 列，不會兩個人各拿到一份地址。
+  // 「通行碼未被撤銷」也一併重寫：SELECT 與 UPDATE 之間若剛好被撤銷，
+  // 綁定同樣會更新 0 列，不會把地址送給剛被撤銷的志工。
   const updateResult = await env.DB.prepare(
     `UPDATE volunteer_claims SET verified_line_user_id = ?
-     WHERE id = ? AND verified_line_user_id IS NULL`
+     WHERE id = ? AND verified_line_user_id IS NULL
+       AND ${CLAIM_CODE_NOT_REVOKED_SQL}`
   )
     .bind(lineUserId, claim.id)
     .run();
@@ -906,6 +976,209 @@ export async function verifyAndBindLineCode(
   if (caseRow.status === "closed" || caseRow.status === "completed") return null;
 
   return caseRow;
+}
+
+// ---------------------------------------------------------------------------
+// 志工通行碼：認領案件必須帶有效通行碼。由 admin 發放、可撤銷，撤銷立即生效。
+// 公開地圖與清單不需要通行碼。
+//
+// 這是最小可行的身分門檻，不是 LINE Login：通行碼只回答「這個人是不是協調單位
+// 認得的志工」，不回答「這個人是誰」。
+// ---------------------------------------------------------------------------
+
+/**
+ * 32 個字元，排除容易跟別的字元看混的 I、L、O、U。
+ * 剛好 32 個（2 的 5 次方），所以對一個 byte 取 & 31 能均勻對應到每個字元，
+ * 沒有取餘數造成的偏差（256 能被 32 整除）。
+ */
+const VOLUNTEER_CODE_ALPHABET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
+const VOLUNTEER_CODE_LENGTH = 12;
+/** normalize 之後必須是字母表內的 12 個字元；格式不對的輸入連雜湊都不用算。 */
+const VOLUNTEER_CODE_PATTERN = /^[0-9A-HJKMNP-TV-Z]{12}$/;
+/** 輸入長度上限（含連字號與空白）：只是不讓人拿超長字串來耗 CPU。 */
+const VOLUNTEER_CODE_MAX_INPUT_LENGTH = 64;
+
+/** 產生一組通行碼，回傳顯示格式 XXXX-XXXX-XXXX（12 碼，約 60 位元的熵）。 */
+export function generateVolunteerCode(): string {
+  const bytes = new Uint8Array(VOLUNTEER_CODE_LENGTH);
+  crypto.getRandomValues(bytes);
+  let raw = "";
+  for (const b of bytes) raw += VOLUNTEER_CODE_ALPHABET[b & 31];
+  return `${raw.slice(0, 4)}-${raw.slice(4, 8)}-${raw.slice(8, 12)}`;
+}
+
+/**
+ * 把使用者輸入整理成雜湊用的標準形：轉大寫、移除連字號與所有空白，
+ * 再把容易混淆的 O→0、I→1、L→1。
+ * 字母表本身排除了 I、L、O，所以這三個字元只可能是打錯，不可能是合法碼的一部分。
+ */
+export function normalizeVolunteerCode(input: string): string {
+  return input
+    .toUpperCase()
+    .replace(/[-\s]/g, "")
+    .replace(/O/g, "0")
+    .replace(/[IL]/g, "1");
+}
+
+/**
+ * 發放一組通行碼。回傳的明文只此一次 —— 資料庫只存 normalize 後的 SHA-256 雜湊，
+ * 明文不寫進 D1、也不寫進任何 log（包含錯誤訊息）。
+ */
+export async function createVolunteerCode(
+  env: Env,
+  label: string,
+  validDays: number
+): Promise<{ id: number; code: string; expires_at: string }> {
+  // 60 位元的碼撞到的機率可以忽略，但 code_hash 有 UNIQUE，真撞到就換一組再試，
+  // 不要讓 admin 看到一個莫名其妙的 500。
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const code = generateVolunteerCode();
+    const codeHash = await sha256Hex(normalizeVolunteerCode(code));
+    try {
+      await env.DB.prepare(
+        `INSERT INTO volunteer_codes (code_hash, label, expires_at)
+         VALUES (?, ?, datetime('now', '+' || ? || ' days'))`
+      )
+        .bind(codeHash, label, validDays)
+        .run();
+    } catch (err) {
+      if (String(err).includes("UNIQUE")) continue;
+      throw err;
+    }
+    const row = await env.DB.prepare(
+      `SELECT id, expires_at FROM volunteer_codes WHERE code_hash = ?`
+    )
+      .bind(codeHash)
+      .first<{ id: number; expires_at: string }>();
+    if (!row) throw new Error("Failed to read back the created volunteer code");
+    return { id: row.id, code, expires_at: row.expires_at };
+  }
+  throw new Error("Failed to generate a unique volunteer code");
+}
+
+/**
+ * 驗證通行碼：雜湊比對，且沒被撤銷、尚未過期。通過回傳 {id, label}，其餘一律 null ——
+ * 沒帶、格式不對、不存在、過期、撤銷全部同一個結果，呼叫端沒辦法（也不該）知道是哪一種。
+ *
+ * 過期只擋「新的認領」。已經發出的 claim token 不會因為通行碼過期而失效，
+ * 所以 verifyClaimToken 那幾處不看 expires_at；只有撤銷才會讓它們立即失效。
+ */
+export async function verifyVolunteerCode(
+  env: Env,
+  code: unknown
+): Promise<{ id: number; label: string } | null> {
+  if (typeof code !== "string") return null;
+  if (code.length === 0 || code.length > VOLUNTEER_CODE_MAX_INPUT_LENGTH) return null;
+  const normalized = normalizeVolunteerCode(code);
+  if (!VOLUNTEER_CODE_PATTERN.test(normalized)) return null;
+
+  const row = await env.DB.prepare(
+    `SELECT id, label FROM volunteer_codes
+     WHERE code_hash = ? AND revoked_at IS NULL AND expires_at > datetime('now')
+     LIMIT 1`
+  )
+    .bind(await sha256Hex(normalized))
+    .first<{ id: number; label: string }>();
+  return row ?? null;
+}
+
+export interface VolunteerCodeSummary {
+  id: number;
+  label: string;
+  created_at: string;
+  expires_at: string;
+  revoked: boolean;
+  revoked_at: string | null;
+  status: "active" | "expired" | "revoked";
+  /** 這組碼名下目前還存在的認領筆數（被撤銷釋放掉的認領已經刪除，不算在內） */
+  claim_count: number;
+}
+
+/** 列出所有通行碼。不含雜湊、更沒有明文 —— 明文發放之後就不存在了。 */
+export async function listVolunteerCodes(env: Env): Promise<VolunteerCodeSummary[]> {
+  const { results } = await env.DB.prepare(
+    `SELECT vcode.id, vcode.label, vcode.created_at, vcode.expires_at, vcode.revoked_at,
+       CASE
+         WHEN vcode.revoked_at IS NOT NULL THEN 'revoked'
+         WHEN vcode.expires_at <= datetime('now') THEN 'expired'
+         ELSE 'active'
+       END AS status,
+       (SELECT COUNT(*) FROM volunteer_claims vc WHERE vc.volunteer_code_id = vcode.id) AS claim_count
+     FROM volunteer_codes vcode
+     ORDER BY vcode.id DESC`
+  ).all<{
+    id: number;
+    label: string;
+    created_at: string;
+    expires_at: string;
+    revoked_at: string | null;
+    status: "active" | "expired" | "revoked";
+    claim_count: number;
+  }>();
+  return results.map((r) => ({ ...r, revoked: r.revoked_at !== null }));
+}
+
+/** 給 admin 路由區分「不存在（404）」與「已撤銷（409）」用。 */
+export async function volunteerCodeExists(env: Env, id: number): Promise<boolean> {
+  const row = await env.DB.prepare(`SELECT 1 AS found FROM volunteer_codes WHERE id = ?`)
+    .bind(id)
+    .first<{ found: number }>();
+  return row !== null;
+}
+
+/**
+ * 撤銷一組通行碼，立即生效，並把它名下還佔著名額的認領全部釋放。
+ *
+ * 撤銷本身是單一 UPDATE ... WHERE revoked_at IS NULL，靠 meta.changes 判斷 ——
+ * 兩位 admin 同時按撤銷時只有一個會更新到列，不會重複釋放。沒更新到（已撤銷或不存在）
+ * 回傳 null。
+ *
+ * 撤銷的當下，這組碼名下所有 claim token 就已經被 CLAIM_CODE_NOT_REVOKED_SQL 擋死
+ *（查地址、回報完成、取消認領、LINE 綁定都會失敗）。接著才釋放名額：只處理案件仍在
+ * open／full 的認領 —— completed／closed 的案件名額已經沒有意義，不該被復活。
+ * 釋放走既有的 cancelClaim：刪掉那一筆認領、名額減一、full 變回 open，
+ * 同案件其他志工的認領完全不受影響。
+ *
+ * 回傳實際釋放的筆數。
+ */
+export async function revokeVolunteerCode(env: Env, id: number): Promise<number | null> {
+  const revoked = await env.DB.prepare(
+    `UPDATE volunteer_codes SET revoked_at = datetime('now')
+     WHERE id = ? AND revoked_at IS NULL`
+  )
+    .bind(id)
+    .run();
+  if (!revoked.meta.changes) return null;
+
+  const { results } = await env.DB.prepare(
+    `SELECT vc.id AS claim_id, vc.case_id
+     FROM volunteer_claims vc
+     JOIN cases c ON c.id = vc.case_id
+     WHERE vc.volunteer_code_id = ? AND c.status IN ('open', 'full')`
+  )
+    .bind(id)
+    .all<{ claim_id: number; case_id: number }>();
+
+  let released = 0;
+  const failedCaseIds: number[] = [];
+  for (const claim of results) {
+    // 單筆失敗不該讓後面的認領都留在原地佔名額：記下來、繼續釋放，最後再一起回報。
+    try {
+      const result = await cancelClaim(env, claim.case_id, claim.claim_id);
+      if (!result) continue; // 已經被別的路徑釋放掉了
+      released++;
+      await logHistory(env, claim.case_id, "claim_released_code_revoked", `code_id=${id}`);
+    } catch {
+      failedCaseIds.push(claim.case_id);
+    }
+  }
+  if (failedCaseIds.length > 0) {
+    // 只寫案件編號：不寫通行碼、不寫雜湊。
+    throw new Error(
+      `Volunteer code ${id} revoked and ${released} claim(s) released, but releasing failed for case(s): ${failedCaseIds.join(",")}`
+    );
+  }
+  return released;
 }
 
 async function sha256Hex(input: string): Promise<string> {

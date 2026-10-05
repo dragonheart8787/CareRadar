@@ -65,6 +65,18 @@ CREATE TABLE IF NOT EXISTS volunteer_claims (
   claim_token_hash    TEXT,                                  -- SHA-256(claim token)；原始 token 只在認領當下回傳一次
   line_verify_code    TEXT,                                  -- 一次性 6 碼綁定驗證碼，30 分鐘有效；短碼、非長期憑證，所以不雜湊
   verified_line_user_id TEXT,                                -- 綁定成功的 LINE userId；非 NULL 代表這組驗證碼已用掉
+  volunteer_code_id   INTEGER,                               -- 認領時用的志工通行碼（volunteer_codes.id）；NULL = 通行碼機制上線前的舊認領
   claimed_at          TEXT NOT NULL DEFAULT (datetime('now')),
   FOREIGN KEY (case_id) REFERENCES cases(id)
+);
+
+-- 志工通行碼：由 admin 發放、可撤銷。認領案件必須帶有效通行碼。
+-- 只存雜湊：明文只在發放當下回傳一次，之後連系統自己也查不回來。
+CREATE TABLE IF NOT EXISTS volunteer_codes (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  code_hash   TEXT NOT NULL UNIQUE,                          -- SHA-256(normalize 後的通行碼)
+  label       TEXT NOT NULL,                                 -- 這組碼發給誰／哪個單位（給通報者看的志工名稱也用這個）
+  created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+  expires_at  TEXT NOT NULL,                                 -- 只影響「新的認領」，不影響已發出的 claim token
+  revoked_at  TEXT                                           -- 非 NULL = 已撤銷，立即生效
 );

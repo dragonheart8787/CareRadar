@@ -4,17 +4,23 @@ import {
   cancelClaim,
   CaseNotMergeableError,
   claimCase,
+  createVolunteerCode,
   getCase,
   listCases,
   listPossibleDuplicates,
+  listVolunteerCodes,
   markCaseCompleted,
   resolveDuplicate,
+  revokeVolunteerCode,
   verifyClaimToken,
   verifyClaimTokenReturningClaimId,
+  verifyVolunteerCode,
+  VolunteerCodeRevokedError,
+  volunteerCodeExists,
 } from "./db";
 import { handleLineWebhook, pushMessage, timingSafeEqual } from "./line";
 import { renderHtml } from "./frontend";
-import { renderDuplicatesHtml } from "./admin";
+import { renderDuplicatesHtml, renderVolunteersHtml } from "./admin";
 
 function toApiCase(row: CaseRow) {
   return {
@@ -57,6 +63,18 @@ function safeParseArray(json: string | null): string[] {
 }
 
 const JSON_HEADERS = { "content-type": "application/json; charset=utf-8" };
+
+/**
+ * 認領時通行碼驗證失敗的唯一回應。沒帶、格式不對、不存在、過期、被撤銷、甚至在寫入
+ * 認領的途中才被撤銷，全部走這一個 —— 狀態碼與 body 逐字相同，外部沒辦法靠差異
+ * 推敲「這組碼存不存在」或「曾經有效過」。
+ */
+function invalidVolunteerCodeResponse(): Response {
+  return new Response(JSON.stringify({ error: "invalid volunteer code" }), {
+    status: 403,
+    headers: JSON_HEADERS,
+  });
+}
 
 /**
  * 通知原始通報者：認領狀態有變化。
@@ -206,16 +224,30 @@ export default {
       }
 
       const caseId = parseInt(claimMatch[1], 10);
-      let body: { name?: string; contact?: string } = {};
+      let body: { name?: unknown; contact?: unknown; code?: unknown } = {};
       try {
-        body = await request.json();
+        const parsed: unknown = await request.json();
+        if (parsed !== null && typeof parsed === "object") body = parsed;
       } catch {
-        // 空 body 也允許（匿名認領）
+        // 解析失敗就當成沒帶：下面的通行碼驗證會擋掉
       }
-      const claimed = await claimCase(env, caseId, {
-        name: body.name,
-        contact: body.contact,
-      });
+
+      // 認領必須帶 admin 發放、未過期、未撤銷的志工通行碼。這一步在 rate limit 之後、
+      // 碰任何案件資料之前：驗證失敗不會動到案件狀態、認領數、歷程。
+      const volunteer = await verifyVolunteerCode(env, body.code);
+      if (!volunteer) return invalidVolunteerCodeResponse();
+
+      const name = typeof body.name === "string" ? body.name : undefined;
+      const contact = typeof body.contact === "string" ? body.contact : undefined;
+      let claimed: Awaited<ReturnType<typeof claimCase>>;
+      try {
+        claimed = await claimCase(env, caseId, { name, contact }, volunteer.id);
+      } catch (err) {
+        // 驗證通過之後、寫入認領之前，這組碼剛好被撤銷：那筆認領已經被釋放，
+        // 對外跟「通行碼無效」是同一個回應。
+        if (err instanceof VolunteerCodeRevokedError) return invalidVolunteerCodeResponse();
+        throw err;
+      }
       if (!claimed) {
         return new Response(
           JSON.stringify({ error: "case is full or not open" }),
@@ -228,7 +260,9 @@ export default {
         notifyReporter(
           env,
           claimed.case,
-          `好消息！已經有志工認領您的需求，目前是 ${claimed.case.volunteers_assigned}/${claimed.case.volunteers_needed} 位志工協助中。\n認領志工：${body.name ?? "匿名志工"}`
+          // 志工名稱用通行碼的 label（admin 發碼時自己填的），不用志工自己輸入的
+          // name —— 後者誰都能填成「市政府」。name 仍照舊存進 volunteer_claims。
+          `好消息！已經有志工認領您的需求，目前是 ${claimed.case.volunteers_assigned}/${claimed.case.volunteers_needed} 位志工協助中。\n認領志工：${volunteer.label}`
         )
       );
 
@@ -313,6 +347,86 @@ export default {
       return new Response(JSON.stringify(toApiCase(result.case)), {
         headers: JSON_HEADERS,
       });
+    }
+
+    // 後台：志工通行碼管理頁。授權方式與疑似重複頁相同（HTTP Basic Auth）。
+    if (request.method === "GET" && url.pathname === "/admin/volunteers") {
+      if (!isAuthorizedViaBasicAuth(request, env)) {
+        return new Response("unauthorized", {
+          status: 401,
+          headers: BASIC_AUTH_CHALLENGE,
+        });
+      }
+      const rows = await listVolunteerCodes(env);
+      return new Response(renderVolunteersHtml(rows), {
+        headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" },
+      });
+    }
+
+    // 發放通行碼。明文只在這一次回應裡出現（201），之後系統只留雜湊。
+    if (request.method === "POST" && url.pathname === "/api/admin/volunteer-codes") {
+      // 授權先於解析 body：沒通過就不該讓未授權請求觸發任何後續處理。
+      if (!isAuthorizedViaBasicAuth(request, env)) {
+        return new Response("unauthorized", { status: 401 });
+      }
+      let body: { label?: unknown; validDays?: unknown } = {};
+      try {
+        const parsed: unknown = await request.json();
+        if (parsed !== null && typeof parsed === "object") body = parsed;
+      } catch {
+        // 解析失敗就留空物件，下面的欄位檢查會擋掉
+      }
+      const label = typeof body.label === "string" ? body.label.trim() : "";
+      const labelLength = Array.from(label).length;
+      if (labelLength < 1 || labelLength > 60) {
+        return new Response(JSON.stringify({ error: "label must be 1 to 60 characters" }), {
+          status: 400,
+          headers: JSON_HEADERS,
+        });
+      }
+      const validDays = body.validDays === undefined ? 14 : body.validDays;
+      if (
+        typeof validDays !== "number" ||
+        !Number.isInteger(validDays) ||
+        validDays < 1 ||
+        validDays > 90
+      ) {
+        return new Response(JSON.stringify({ error: "validDays must be an integer from 1 to 90" }), {
+          status: 400,
+          headers: JSON_HEADERS,
+        });
+      }
+      const created = await createVolunteerCode(env, label, validDays);
+      return new Response(JSON.stringify(created), {
+        status: 201,
+        // 回應裡有明文通行碼：不准被任何中間層快取。
+        headers: { ...JSON_HEADERS, "cache-control": "no-store" },
+      });
+    }
+
+    // 撤銷通行碼：立即生效，並釋放它名下還佔著名額的認領。
+    const revokeMatch = url.pathname.match(/^\/api\/admin\/volunteer-codes\/(\d+)\/revoke$/);
+    if (request.method === "POST" && revokeMatch) {
+      if (!isAuthorizedViaBasicAuth(request, env)) {
+        return new Response("unauthorized", { status: 401 });
+      }
+      const codeId = parseInt(revokeMatch[1], 10);
+      const released = await revokeVolunteerCode(env, codeId);
+      if (released === null) {
+        // 沒更新到有兩種原因：不存在（404）、已經撤銷過（409，這個操作在目前狀態下
+        // 不被允許）—— 跟疑似重複那組端點同一套慣例。
+        if (await volunteerCodeExists(env, codeId)) {
+          return new Response(JSON.stringify({ error: "volunteer code already revoked" }), {
+            status: 409,
+            headers: JSON_HEADERS,
+          });
+        }
+        return new Response(JSON.stringify({ error: "volunteer code not found" }), {
+          status: 404,
+          headers: JSON_HEADERS,
+        });
+      }
+      return new Response(JSON.stringify({ released }), { headers: JSON_HEADERS });
     }
 
     // 後台：疑似重複案件複核頁。回應一律不透露頁面內容或金鑰格式。
