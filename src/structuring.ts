@@ -175,12 +175,43 @@ export function rejectHallucinatedLocation(
   // 字串。模型在地址前後多打一個空白不是幻覺，不該被當成幻覺處理。
   const candidate = locationText.trim();
   if (!candidate) return null;
-  if (rawText.includes(candidate)) return locationText;
 
-  console.warn(
-    "Rejected hallucinated location_text (not found in raw input): " + locationText
-  );
-  return null;
+  if (!rawText.includes(candidate)) {
+    console.warn(
+      "Rejected hallucinated location_text (not found in raw input): " + locationText
+    );
+    return null;
+  }
+
+  // 第二道：字確實在原文裡，但不是地名（實測 id=39：快速回覆按鈕的文字
+  // 「家裡淹水超過80公分，腰部以上」被填成 location_text =「家裡」）。
+  // 警告訊息刻意跟上面不同，Workers Logs 才分得出兩種拒絕原因、統計誤殺率。
+  if (!looksLikeAPlaceName(candidate)) {
+    console.warn("Rejected non-place location_text: " + locationText);
+    return null;
+  }
+
+  return locationText;
+}
+
+// 地名單位字。只要含其中一個就當成「像地名」。
+const PLACE_NAME_UNIT_CHARS = [
+  "縣", "市", "區", "鄉", "鎮", "村", "里", "路", "街", "巷",
+  "弄", "號", "段", "道", "島", "港", "橋", "站", "校", "院",
+];
+
+/**
+ * 粗略判斷一個字串「長得像不像地名」：trim 後至少 2 個字元，且至少含一個地名單位字。
+ *
+ * 這是刻意從嚴的啟發式，不是地名辨識。已知的取捨：只寫「台南仁德」這種
+ * 沒有任何單位字的口語地名會被判成不像地名（誤殺）。誤殺的代價只是少一組
+ * 座標、多問使用者一句地址；放過「家裡」這類詞的代價是欄位被視為已填、
+ * 追問被抑制、還可能拿去地理編碼 —— 兩邊不對稱，寧可錯殺。
+ */
+export function looksLikeAPlaceName(text: string): boolean {
+  const candidate = text.trim();
+  if ([...candidate].length < 2) return false;
+  return PLACE_NAME_UNIT_CHARS.some((unit) => candidate.includes(unit));
 }
 
 /**
@@ -257,8 +288,15 @@ export async function extractFields(
   // 只有「模型原本給了地址、而且那個地址被判定為幻覺」時才需要清 summary。
   // 模型一開始就沒給地址（normalizedLocationText 是 null）不在此列 —— 那不是
   // 幻覺，沒有任何字串需要比對。
+  //
+  // 同樣不在此列的還有「在原文裡、但不是地名」被擋掉的值（例如「家裡」）：
+  // 它們出現在 summary 裡是正常用語而不是假地址，全部刪掉只會讓句子變怪。
+  // 所以只清「連原文都找不到」的那一類 —— 判斷條件跟 rejectHallucinatedLocation
+  // 的第一道檢查一致。
   const rejectedLocationName =
-    normalizedLocationText !== null && acceptedLocationText === null
+    normalizedLocationText !== null &&
+    acceptedLocationText === null &&
+    !rawText.includes(normalizedLocationText.trim())
       ? normalizedLocationText.trim()
       : null;
 
