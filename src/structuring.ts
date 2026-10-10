@@ -194,24 +194,45 @@ export function rejectHallucinatedLocation(
   return locationText;
 }
 
-// 地名單位字。只要含其中一個就當成「像地名」。
-const PLACE_NAME_UNIT_CHARS = [
-  "縣", "市", "區", "鄉", "鎮", "村", "里", "路", "街", "巷",
-  "弄", "號", "段", "道", "島", "港", "橋", "站", "校", "院",
+// 縣市名（含台／臺兩種寫法）。台灣人常把「縣市＋區名」省略單位字簡寫成
+// 「新北金山」「高雄鳳山」，這種值沒有任何單位字，靠縣市名來辨認。
+const COUNTY_CITY_NAMES = [
+  "台北", "臺北", "新北", "桃園", "台中", "臺中", "台南", "臺南", "高雄",
+  "基隆", "新竹", "苗栗", "彰化", "南投", "雲林", "嘉義", "屏東", "宜蘭",
+  "花蓮", "台東", "臺東", "澎湖", "金門", "連江", "馬祖",
 ];
 
+// 強單位字：幾乎只會出現在地址裡。刻意不收「道、島、港、橋、站、校、院」——
+// 「道」會被「知道」誤放行，其餘太容易匹配到一般用語。
+const STRONG_PLACE_UNIT_CHARS = [
+  "縣", "市", "區", "鄉", "鎮", "村", "里", "路", "街", "巷", "弄", "號", "段",
+];
+
+// 超過這個長度，視為模型把整句話塞進 location_text，不是地名。
+const PLACE_NAME_MAX_LENGTH = 40;
+
 /**
- * 粗略判斷一個字串「長得像不像地名」：trim 後至少 2 個字元，且至少含一個地名單位字。
+ * 粗略判斷一個字串「長得像不像地名」：trim 後長度 2 到 40 個字元，且含任一縣市名
+ * 或任一強單位字。
  *
- * 這是刻意從嚴的啟發式，不是地名辨識。已知的取捨：只寫「台南仁德」這種
- * 沒有任何單位字的口語地名會被判成不像地名（誤殺）。誤殺的代價只是少一組
- * 座標、多問使用者一句地址；放過「家裡」這類詞的代價是欄位被視為已填、
- * 追問被抑制、還可能拿去地理編碼 —— 兩邊不對稱，寧可錯殺。
+ * 這是啟發式，不是地名辨識，要擋的是兩種值：
+ * 1. 在原文裡、但不是地名的詞（實測 id=39：「家裡」）；
+ * 2. 模型把整句話塞進來（例如「電線泡水了要找人來修」）。
+ *
+ * 規則曾經收得更緊（必須含單位字），後來被正式資料推翻：它會擋掉
+ * 「新北金山」「台南仁德」這類台灣人常用的縣市加區名簡寫，結果是沒有座標、
+ * 持續提示「還不知道您的所在地區」，所以才加入縣市名這一條。
+ * 仍會誤殺的是既沒有縣市名、也沒有強單位字的值（例如只寫「仁德」）；
+ * 誤殺的代價只是少一組座標、多問一句地址。
  */
 export function looksLikeAPlaceName(text: string): boolean {
   const candidate = text.trim();
-  if ([...candidate].length < 2) return false;
-  return PLACE_NAME_UNIT_CHARS.some((unit) => candidate.includes(unit));
+  const length = [...candidate].length;
+  if (length < 2 || length > PLACE_NAME_MAX_LENGTH) return false;
+  return (
+    COUNTY_CITY_NAMES.some((name) => candidate.includes(name)) ||
+    STRONG_PLACE_UNIT_CHARS.some((unit) => candidate.includes(unit))
+  );
 }
 
 /**

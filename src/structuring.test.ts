@@ -76,23 +76,60 @@ test("NaN 與 Infinity 回傳 null，即使上限是 Infinity", () => {
 // 擋的是「在原文裡、但不是地名」的值（實測 id=39：「家裡」）。啟發式刻意從嚴。
 // ---------------------------------------------------------------------------
 
-test("looksLikeAPlaceName：指涉性用語不是地名", () => {
-  for (const text of ["家裡", "我家", "這裡", "附近", "那邊"]) {
+test("looksLikeAPlaceName：指涉性用語與一般用語不是地名", () => {
+  for (const text of ["家裡", "我家", "這裡", "附近", "那邊", "我不知道"]) {
     assert.equal(looksLikeAPlaceName(text), false, text);
   }
 });
 
-test("looksLikeAPlaceName：沒有地名單位字的口語地名判為 false（已知的刻意取捨）", () => {
-  // 「台南仁德」是真地名，但整串沒有縣市區鄉鎮村里路街巷弄號段…任何單位字，
-  // 所以會被誤殺。這是設計上接受的代價：誤殺只是少一組座標、多問一句地址，
-  // 放過「家裡」之類的詞則會墊高信心分數、抑制追問、還可能被拿去地理編碼。
-  // 如果未來要放寬這一條，這個測試會失敗，提醒要重新評估兩邊的代價。
-  assert.equal(looksLikeAPlaceName("台南仁德"), false);
+test("looksLikeAPlaceName：縣市加區名的簡寫（沒有單位字）判為 true", () => {
+  // 規則已因正式資料而改變：上一版要求必須含地名單位字，並把「台南仁德 → false」
+  // 寫成已知的刻意取捨。正式資料顯示這會擋掉台灣人常用的「縣市＋區名」簡寫
+  // （新北金山、新北新店、高雄鳳山、台南仁德…），結果是沒有座標、持續提示
+  // 「還不知道您的所在地區」。現在改成「含縣市名，或含強單位字」，所以這些都放行。
+  for (const text of ["新北金山", "新北新店", "高雄鳳山", "台南仁德", "臺南仁德"]) {
+    assert.equal(looksLikeAPlaceName(text), true, text);
+  }
 });
 
-test("looksLikeAPlaceName：含地名單位字的值為 true", () => {
+test("looksLikeAPlaceName：含強單位字的值為 true", () => {
   for (const text of ["台南市仁德區", "中正路三段100號", "石汐路", "高雄鳳山區"]) {
     assert.equal(looksLikeAPlaceName(text), true, text);
+  }
+});
+
+test("looksLikeAPlaceName：台／臺兩種寫法與全部縣市名都認得", () => {
+  for (const name of [
+    "台北", "臺北", "新北", "桃園", "台中", "臺中", "台南", "臺南", "高雄", "基隆",
+    "新竹", "苗栗", "彰化", "南投", "雲林", "嘉義", "屏東", "宜蘭", "花蓮", "台東",
+    "臺東", "澎湖", "金門", "連江", "馬祖",
+  ]) {
+    assert.equal(looksLikeAPlaceName(name), true, name);
+  }
+});
+
+test("looksLikeAPlaceName：整句話塞進來的值為 false", () => {
+  for (const text of ["電線泡水了要找人來修", "請問怎麼使用"]) {
+    assert.equal(looksLikeAPlaceName(text), false, text);
+  }
+});
+
+test("looksLikeAPlaceName：超過 40 字一律 false，即使含縣市名", () => {
+  const at40 = "台南市" + "一".repeat(37);
+  assert.equal([...at40].length, 40);
+  assert.equal(looksLikeAPlaceName(at40), true, "剛好 40 字仍可通過");
+  const at41 = at40 + "一";
+  assert.equal(looksLikeAPlaceName(at41), false, "41 字視為整句話");
+  assert.equal(
+    looksLikeAPlaceName("我住在台南市仁德區的某個社區裡面，家裡一樓整個都淹水了，需要有人來幫忙處理一下，麻煩盡快"),
+    false
+  );
+});
+
+test("looksLikeAPlaceName：已移除的弱單位字不再放行", () => {
+  // 道、島、港、橋、站、校、院：「道」會被「知道」誤放行，其餘太容易匹配到一般用語。
+  for (const text of ["知道了", "學校", "醫院", "車站", "大橋", "港口", "小島", "報道"]) {
+    assert.equal(looksLikeAPlaceName(text), false, text);
   }
 });
 
@@ -140,6 +177,21 @@ test("rejectHallucinatedLocation：「台南市仁德區」在原文裡 → 保�
   );
   assert.equal(result, "台南市仁德區");
   assert.equal(warns.length, 0);
+});
+
+test("rejectHallucinatedLocation：「新北新店」在原文裡 → 保留，不記錄警告", () => {
+  const { result, warns } = captureWarns(() =>
+    rejectHallucinatedLocation("新北新店", "我在新北新店，家裡淹水")
+  );
+  assert.equal(result, "新北新店");
+  assert.equal(warns.length, 0);
+});
+
+test("rejectHallucinatedLocation：整句話塞進 location_text → null（非地名）", () => {
+  const raw = "電線泡水了要找人來修";
+  const { result, warns } = captureWarns(() => rejectHallucinatedLocation(raw, raw));
+  assert.equal(result, null);
+  assert.match(warns[0], /^Rejected non-place location_text: /);
 });
 
 test("rejectHallucinatedLocation：原文裡沒有的地名 → 仍回傳 null，沿用既有的『幻覺』訊息", () => {
